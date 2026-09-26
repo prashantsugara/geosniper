@@ -16,28 +16,31 @@ When you use map search or map-based gameplay, the selected area, coordinates or
 
 The current game integration may use Overture map data, OpenStreetMap/Overpass services, Photon place search and map or elevation tile services where enabled. These independent services have their own privacy policies and terms.
 
-Maps are approximate geographic data used for fictional gameplay. Geo Sniper is not a navigation, emergency, surveillance or real-world targeting service.
+Maps are a fundamental part of the gameplay. Map tile data is cached on your device to reduce data usage and improve load times. No background location is ever requested.
 
-## Advertising and consent
+## Analytics
 
-Geo Sniper uses Google Mobile Ads and Google's consent platform. Depending on your region, consent choices and the release configuration, Google may process advertising or device identifiers, approximate location, ad interactions and diagnostic information for advertising, measurement, fraud prevention and service operation.
+Geo Sniper collects anonymous gameplay analytics to understand how the game is played and to improve it. This includes information such as app opens, play session length, mission outcomes, weapon upgrades and ad reward events. No name, email address or precise location is included in analytics data.
 
-You can review available advertising privacy choices from the game's Settings screen. Rewarded advertising rewards are granted only when the advertising SDK reports that the ad was completed. Reviews are never required or rewarded.
+Analytics data is sent to:
 
-For more information, see [Google's Privacy Policy](https://policies.google.com/privacy) and [Google advertising technology](https://policies.google.com/technologies/ads).
+- **Google Firebase Analytics** — [Google Privacy Policy](https://policies.google.com/privacy)
+- **Unity Analytics** — [Unity Privacy Policy](https://unity.com/legal/privacy-policy)
 
-## Support requests
+You can turn analytics off at any time in **Settings → Privacy & Support** inside the game. When analytics is turned off, no new events are sent and previously collected data deletion can be requested.
 
-If you contact support, the information in your message and your email address are used to respond to your request. Please do not send passwords, signing keys or unnecessary personal information.
+## Advertising
 
-Contact: [bittruth1solutions@gmail.com](mailto:bittruth1solutions@gmail.com)
+Geo Sniper may show ads provided by Google AdMob. AdMob may use device identifiers and usage data to serve interest-based ads. You can review ad privacy choices in your device settings under **Google → Ads**. AdMob is subject to the [Google Privacy Policy](https://policies.google.com/privacy).
 
-## Your choices and requests
+## Children
 
-You can decline location access, use place search or play offline. You can change available advertising privacy choices in Settings and clear saved location/map data in the privacy screen.
+Geo Sniper is not directed at children under 13. We do not knowingly collect personal information from children under 13.
 
-For questions or privacy requests concerning information controlled by the game publisher, contact bittruth1solutions@gmail.com. Requests involving independent map, search or advertising providers may also need to be sent to those providers.
+## Changes to this policy
 
-## Policy changes
+We may update this policy from time to time. The effective date at the top of this document will reflect the most recent revision. Continued use of the game after changes constitutes acceptance of the updated policy.
 
-This policy may be updated when the game, advertising SDKs, map providers or applicable requirements change. The effective date above identifies the current version.
+## Contact
+
+For data requests, questions or concerns contact: **bittruth1solutions@gmail.com**
