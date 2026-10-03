@@ -69,6 +69,7 @@ namespace GeoSniper
         EnemyBot duelRivalSniper;
         float duelLockTimer;
         Vector3 duelRivalHome;
+        public Vector3 DuelRivalPosition => duelRivalHome;
         const float DuelMinimumSeparation = 78f;
         float duelStrafePhase;
         int duelLevel;
@@ -2577,6 +2578,18 @@ namespace GeoSniper
                 duelLaserLine.enabled = true;
             }
         }
+
+        public void DisableAIRivalForMultiplayer()
+        {
+            if (duelRivalSniper != null)
+            {
+                duelRivalSniper.gameObject.SetActive(false);
+            }
+            if (duelLaserLine != null)
+            {
+                duelLaserLine.enabled = false;
+            }
+        }
         string StageTitle()
         {
             if(campaignNode!=null) return CampaignProgression.Label(campaignNode)+" / "+campaignNode.title;
@@ -3606,9 +3619,9 @@ namespace GeoSniper
 
             if (isPvPDuel && currentMissionState == MissionState.InProgress)
             {
-                if (GeoSniper.Duel.SniperDuelNetwork.Instance != null && GeoSniper.Duel.SniperDuelNetwork.Instance.IsConnected)
+                if (GeoSniper.Duel.SniperDuelNetwork.Instance != null && (GeoSniper.Duel.SniperDuelNetwork.Instance.IsConnected || GeoSniper.Duel.SniperDuelNetwork.Instance.IsHost))
                 {
-                    if (duelLaserLine != null) duelLaserLine.enabled = false;
+                    DisableAIRivalForMultiplayer();
                     return;
                 }
                 if (duelRivalSniper != null && duelRivalSniper.GetComponent<CombatActor>().IsDead)

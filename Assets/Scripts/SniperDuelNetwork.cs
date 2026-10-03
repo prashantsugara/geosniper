@@ -537,14 +537,21 @@ namespace GeoSniper.Duel
         public static IPEndPoint ResolveTarget(string input, int defaultPort)
         {
             if (string.IsNullOrWhiteSpace(input)) return null;
-            input = input.Trim().ToUpperInvariant();
+            input = input.Trim();
+
+            // Direct localhost check
+            if (string.Equals(input, "localhost", StringComparison.OrdinalIgnoreCase) || input == "127.0.0.1")
+            {
+                return new IPEndPoint(IPAddress.Loopback, defaultPort);
+            }
 
             // Check if room code format "D-XXXX" (Local Subnet code)
-            if (input.StartsWith("D-") && input.Length >= 6)
+            string upper = input.ToUpperInvariant();
+            if (upper.StartsWith("D-") && upper.Length >= 6)
             {
                 try
                 {
-                    string hex = input.Substring(2);
+                    string hex = upper.Substring(2);
                     int b3 = Convert.ToInt32(hex.Substring(0, 2), 16);
                     int b4 = Convert.ToInt32(hex.Substring(2, 2), 16);
                     string localSubnet = GetLocalSubnetPrefix();
@@ -566,6 +573,11 @@ namespace GeoSniper.Duel
             try
             {
                 var addresses = Dns.GetHostAddresses(host);
+                foreach (var addr in addresses)
+                {
+                    if (addr.AddressFamily == AddressFamily.InterNetwork)
+                        return new IPEndPoint(addr, p);
+                }
                 if (addresses.Length > 0) return new IPEndPoint(addresses[0], p);
             }
             catch { }
@@ -593,11 +605,10 @@ namespace GeoSniper.Duel
         private static string GetLocalSubnetPrefix()
         {
             string ip = GetLocalIPAddress();
-            int idx = ip.LastIndexOf('.');
-            if (idx > 0)
+            string[] parts = ip.Split('.');
+            if (parts.Length >= 2)
             {
-                int firstIdx = ip.IndexOf('.');
-                return ip.Substring(0, firstIdx); // returns 192 or similar
+                return $"{parts[0]}.{parts[1]}";
             }
             return "192.168";
         }

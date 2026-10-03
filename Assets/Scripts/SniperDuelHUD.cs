@@ -29,6 +29,7 @@ namespace GeoSniper.Duel
         private SniperDuelManager duelManager;
 
         private string inputRoomCode = "";
+        private string joinNotice = "";
         private Vector2 lanScroll;
         private int selectedTab = 0; // 0=Create, 1=Join
 
@@ -123,6 +124,12 @@ namespace GeoSniper.Duel
             if (selectedTab == 0)
             {
                 if (network != null && !network.IsHost) network.StartHost();
+                if (network != null && network.IsConnected)
+                {
+                    ShowLobbyModal = false;
+                    GeoSniperGame.Instance?.DeployPvPDuel(true, "");
+                    return;
+                }
                 DrawHostTab(content);
             }
             else
@@ -148,15 +155,22 @@ namespace GeoSniper.Duel
             // Radar search animation
             float pulse = 0.5f + Mathf.PingPong(Time.unscaledTime * 2f, 0.5f);
             Color radarCol = new Color(CommandGUI.AccentCyan.r, CommandGUI.AccentCyan.g, CommandGUI.AccentCyan.b, pulse);
-            DrawLabel(new Rect(r.x, r.y + 120, r.width, 24), "◉ WAITING FOR CHALLENGER TO CONNECT...", 12, radarCol, true, TextAnchor.MiddleCenter);
+            DrawLabel(new Rect(r.x, r.y + 112, r.width, 22), "◉ WAITING FOR CHALLENGER TO CONNECT...", 11, radarCol, true, TextAnchor.MiddleCenter);
 
-            // Practice Bot button
-            Rect botBtn = new Rect(r.x + (r.width - 240) * 0.5f, r.y + 170, 240, 44);
-            if (CommandGUI.DrawButton(botBtn, "PRACTICE VS RIVAL BOT ➔", false, 11))
+            // Deploy to rooftop & wait button
+            Rect waitBtn = new Rect(r.x + (r.width - 280) * 0.5f, r.y + 144, 280, 40);
+            if (CommandGUI.DrawButton(waitBtn, "ENTER ROOFTOP & WAIT ➔", true, 11))
             {
                 ShowLobbyModal = false;
-                UrbanCombatMission mission = FindAnyObjectByType<UrbanCombatMission>();
-                if (mission != null) mission.BeginPvPDuel(-1);
+                GeoSniperGame.Instance?.DeployPvPDuel(true, "");
+            }
+
+            // Practice Bot button
+            Rect botBtn = new Rect(r.x + (r.width - 280) * 0.5f, r.y + 192, 280, 36);
+            if (CommandGUI.DrawButton(botBtn, "PRACTICE VS RIVAL BOT ➔", false, 10))
+            {
+                ShowLobbyModal = false;
+                GeoSniperGame.Instance?.DeployPvPDuel(false, "", true);
             }
         }
 
@@ -168,25 +182,42 @@ namespace GeoSniper.Duel
             inputRoomCode = GUI.TextField(new Rect(r.x, r.y + 24, r.width - 140, 36), inputRoomCode, 32);
 
             Rect joinBtn = new Rect(r.x + r.width - 130, r.y + 24, 130, 36);
-            if (CommandGUI.DrawButton(joinBtn, "ENGAGE ➔", !string.IsNullOrEmpty(inputRoomCode), 11))
+            bool hasCode = !string.IsNullOrWhiteSpace(inputRoomCode);
+            if (CommandGUI.DrawButton(joinBtn, "ENGAGE ➔", hasCode, 11))
             {
-                if (!string.IsNullOrEmpty(inputRoomCode))
+                if (hasCode)
                 {
                     ShowLobbyModal = false;
-                    UrbanCombatMission mission = FindAnyObjectByType<UrbanCombatMission>();
-                    duelManager.StartDuelMatch(mission, false, inputRoomCode);
+                    GeoSniperGame.Instance?.DeployPvPDuel(false, inputRoomCode.Trim());
+                }
+                else
+                {
+                    joinNotice = "ENTER HOST ROOM CODE (e.g. D-0105) OR DIRECT IP";
                 }
             }
 
-            // LAN discovered hosts header
-            DrawLabel(new Rect(r.x, r.y + 75, r.width, 18), "// DETECTED LOCAL NETWORK DUELS //", 9, CommandGUI.AccentGold, true);
+            // Status message and quick localhost button
+            Rect helperRow = new Rect(r.x, r.y + 64, r.width, 24);
+            string tipText = string.IsNullOrEmpty(joinNotice) ? "Format: 'D-XXXX' room code, '192.168.x.x', or '127.0.0.1'" : joinNotice;
+            DrawLabel(new Rect(helperRow.x, helperRow.y, helperRow.width - 170, 22), tipText, 8, string.IsNullOrEmpty(joinNotice) ? CommandGUI.Muted : CommandGUI.AccentGold);
 
-            Rect listRect = new Rect(r.x, r.y + 98, r.width, r.height - 110);
+            Rect localBtn = new Rect(helperRow.xMax - 165, helperRow.y, 165, 22);
+            if (CommandGUI.DrawButton(localBtn, "TEST LOCALHOST (127.0.0.1)", false, 8))
+            {
+                inputRoomCode = "127.0.0.1";
+                ShowLobbyModal = false;
+                GeoSniperGame.Instance?.DeployPvPDuel(false, "127.0.0.1");
+            }
+
+            // LAN discovered hosts header
+            DrawLabel(new Rect(r.x, r.y + 92, r.width, 18), "// DETECTED LOCAL NETWORK DUELS //", 9, CommandGUI.AccentGold, true);
+
+            Rect listRect = new Rect(r.x, r.y + 114, r.width, r.height - 124);
             DrawRect(listRect, new Color(0.03f, 0.05f, 0.07f, 0.90f));
 
             if (network == null || network.DiscoveredLANHosts.Count == 0)
             {
-                DrawLabel(listRect, "NO DUELS FOUND ON LOCAL WI-FI / HOTSPOT.\nHOST A DUEL OR ENTER IP ABOVE.", 10, CommandGUI.Muted, false, TextAnchor.MiddleCenter);
+                DrawLabel(listRect, "NO DUELS FOUND ON LOCAL WI-FI / HOTSPOT.\nHOST A DUEL OR ENTER IP / CODE ABOVE.", 10, CommandGUI.Muted, false, TextAnchor.MiddleCenter);
             }
             else
             {
@@ -203,8 +234,7 @@ namespace GeoSniper.Duel
                     if (CommandGUI.DrawButton(new Rect(hostItem.xMax - 95, hostItem.y + 6, 85, 30), "JOIN ➔", true, 9))
                     {
                         ShowLobbyModal = false;
-                        UrbanCombatMission mission = FindAnyObjectByType<UrbanCombatMission>();
-                        duelManager.StartDuelMatch(mission, false, host.endpoint.ToString());
+                        GeoSniperGame.Instance?.DeployPvPDuel(false, host.endpoint.ToString());
                     }
                     itemY += 48;
                 }

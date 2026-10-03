@@ -56,6 +56,10 @@ namespace GeoSniper
         float nextSearch;
         Vector2 locationScroll;
         System.Collections.Generic.List<GameLocation> locations;
+        public static GeoSniperGame Instance { get; private set; }
+        private bool pendingMultiplayerDuel;
+        private bool pendingDuelHost;
+        private string pendingDuelTarget = "";
         bool isPvPDuel;
         bool rangeToStart;
         bool showingArmory;
@@ -95,10 +99,50 @@ namespace GeoSniper
             else StopBriefingAudio();
         }
 
+        public void DeployPvPDuel(bool asHost, string roomCodeOrIp = "", bool isPracticeBot = false)
+        {
+            PlayerPrefs.SetInt("GeoSniper.SelectedMode", 3);
+            PlayerPrefs.Save();
+            loadFailed = false; status = ""; mapNotice = "";
+            isPvPDuel = true;
+            rangeToStart = false;
+            campaignNodeToStart = -1;
+            stageIndexToStart = -1;
+
+            pendingMultiplayerDuel = !isPracticeBot;
+            pendingDuelHost = asHost;
+            pendingDuelTarget = roomCodeOrIp;
+
+            if (isPracticeBot)
+            {
+                GeoSniper.Duel.SniperDuelNetwork.Instance?.Disconnect();
+            }
+            else
+            {
+                if (asHost)
+                {
+                    GeoSniper.Duel.SniperDuelNetwork.Instance?.StartHost();
+                }
+                else if (!string.IsNullOrEmpty(roomCodeOrIp))
+                {
+                    GeoSniper.Duel.SniperDuelNetwork.Instance?.StartClient(roomCodeOrIp);
+                }
+            }
+
+            GameLocation loc = PreferredLocation() ?? activeLocation ?? GameLocation.Default;
+            StartCoroutine(Play(loc));
+        }
+
         void ExecuteDeploy(bool useLiveLocation=false)
         {
             loadFailed=false; status=""; mapNotice="";
-            PrepareDeployment(Mathf.Clamp(PlayerPrefs.GetInt("GeoSniper.SelectedMode",0),0,3));
+            int sel = Mathf.Clamp(PlayerPrefs.GetInt("GeoSniper.SelectedMode",0),0,3);
+            if (sel == 3)
+            {
+                DeployPvPDuel(false, "", true);
+                return;
+            }
+            PrepareDeployment(sel);
             StartPreferredLocationMission(useLiveLocation);
         }
 
@@ -175,6 +219,7 @@ namespace GeoSniper
             // Never substitute a city on another continent for an unavailable GPS fix.
             // First-run missions must obtain consent and a fresh device location, or let
             // the player select a named place from the World Map screen.
+            if (isPvPDuel) return GameLocation.Default;
             return null;
         }
 
@@ -224,7 +269,15 @@ namespace GeoSniper
 
             bool prepareContract=stageIndexToStart>=0 || isPvPDuel;
             mission.Begin(view, safeSpawns, safeRoofs, !prepareContract, activeLocation, geographicMap, spawn, prepareContract);
-            if (isPvPDuel) mission.BeginPvPDuel(campaignNodeToStart);
+            if (isPvPDuel)
+            {
+                mission.BeginPvPDuel(campaignNodeToStart);
+                if (pendingMultiplayerDuel && GeoSniper.Duel.SniperDuelManager.Instance != null)
+                {
+                    GeoSniper.Duel.SniperDuelManager.Instance.StartDuelMatch(mission, pendingDuelHost, pendingDuelTarget);
+                    pendingMultiplayerDuel = false;
+                }
+            }
             else if (stageIndexToStart >= 0) mission.BeginStage(stageIndexToStart);
             else if (rangeToStart) mission.BeginRange();
 
@@ -288,6 +341,7 @@ namespace GeoSniper
 
         void Awake()
         {
+            Instance = this;
             Input.backButtonLeavesApp = false;
             Application.runInBackground = true;
             enableElevationForGameplay = PlayerPrefs.GetInt("GeoSniper.RealElevation", 1) == 1;
@@ -1596,6 +1650,7 @@ namespace GeoSniper
             return 0;
         }
 
+        public void ReturnToLobby(int justCompletedNodeId = -1) => ReturnToLevelMap(justCompletedNodeId);
         public void ReturnToLevelMap(int justCompletedNodeId = -1)
         {
             if (mission != null)

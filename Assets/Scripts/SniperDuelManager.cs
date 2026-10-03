@@ -99,15 +99,16 @@ namespace GeoSniper.Duel
 
             if (asHost)
             {
-                network.StartHost();
+                if (network != null && !network.IsHost) network.StartHost();
                 MatchState = DuelMatchState.LobbyWait;
-                SetNotice("ROOM CREATED: " + network.RoomCode + "\nWAITING FOR CHALLENGER...", 30f);
+                string code = (network != null && !string.IsNullOrEmpty(network.RoomCode)) ? network.RoomCode : "INITIALIZING...";
+                SetNotice($"ROOM HOSTED: {code}\nWAITING FOR CHALLENGER TO CONNECT...", 60f);
             }
             else
             {
                 MatchState = DuelMatchState.LobbyWait;
-                SetNotice("CONNECTING TO HOST: " + roomCodeOrIp + "...", 15f);
-                network.StartClient(roomCodeOrIp);
+                SetNotice($"CONNECTING TO HOST: {roomCodeOrIp}...", 20f);
+                if (network != null && !network.IsConnected) network.StartClient(roomCodeOrIp);
             }
         }
 
@@ -130,10 +131,26 @@ namespace GeoSniper.Duel
 
         private IEnumerator InitializeDuelArenaRoutine()
         {
-            yield return new WaitForSeconds(1.0f);
+            float timeout = 12f;
+            while ((localPlayer == null || mission == null || Camera.main == null) && timeout > 0)
+            {
+                localPlayer = UrbanPlayer.Instance;
+                mission = FindAnyObjectByType<UrbanCombatMission>();
+                playerCamera = Camera.main;
+                timeout -= Time.deltaTime;
+                yield return null;
+            }
+
+            yield return new WaitForSeconds(0.5f);
 
             // Locate two elevated rooftop perches with clear line-of-sight
             DetermineRooftopPerches();
+
+            // Disable single-player AI rival bot now that real opponent is active
+            if (mission != null)
+            {
+                mission.DisableAIRivalForMultiplayer();
+            }
 
             // Spawn or reposition local player
             if (localPlayer != null)
@@ -180,6 +197,13 @@ namespace GeoSniper.Duel
 
         private void DetermineRooftopPerches()
         {
+            if (localPlayer != null && mission != null && mission.DuelRivalPosition != Vector3.zero)
+            {
+                LocalSpawnPoint = localPlayer.transform.position;
+                RivalSpawnPoint = mission.DuelRivalPosition;
+                return;
+            }
+
             // Default rooftops if none found dynamically
             LocalSpawnPoint = new Vector3(0, 18f, -120f);
             RivalSpawnPoint = new Vector3(25f, 22f, 85f);
@@ -397,12 +421,16 @@ namespace GeoSniper.Duel
 
         public void LeaveDuel()
         {
-            network.Disconnect();
+            network?.Disconnect();
             MatchState = DuelMatchState.Idle;
             if (Opponent != null)
             {
                 Destroy(Opponent.gameObject);
                 Opponent = null;
+            }
+            if (GeoSniperGame.Instance != null)
+            {
+                GeoSniperGame.Instance.ReturnToLobby(-1);
             }
         }
 
