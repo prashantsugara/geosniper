@@ -217,7 +217,14 @@ namespace GeoSniper.Duel
 
             if (network == null || network.DiscoveredLANHosts.Count == 0)
             {
-                DrawLabel(listRect, "NO DUELS FOUND ON LOCAL WI-FI / HOTSPOT.\nHOST A DUEL OR ENTER IP / CODE ABOVE.", 10, CommandGUI.Muted, false, TextAnchor.MiddleCenter);
+                DrawLabel(new Rect(listRect.x, listRect.y + 10, listRect.width, 36), "NO HOSTS DETECTED ON LOCAL WI-FI / HOTSPOT.\nENTER ROOM CODE / IP ABOVE, OR PLAY SOLO:", 9, CommandGUI.Muted, false, TextAnchor.MiddleCenter);
+
+                Rect soloBtn = new Rect(listRect.x + (listRect.width - 240) * 0.5f, listRect.y + 54, 240, 36);
+                if (CommandGUI.DrawButton(soloBtn, "PLAY VS RIVAL BOT ➔", false, 10))
+                {
+                    ShowLobbyModal = false;
+                    GeoSniperGame.Instance?.DeployPvPDuel(false, "", true);
+                }
             }
             else
             {
