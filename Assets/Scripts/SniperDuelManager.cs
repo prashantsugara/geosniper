@@ -8,7 +8,23 @@ namespace GeoSniper.Duel
 {
     public sealed class SniperDuelManager : MonoBehaviour
     {
-        public static SniperDuelManager Instance { get; private set; }
+        private static SniperDuelManager instance;
+        public static SniperDuelManager Instance
+        {
+            get
+            {
+                if (instance == null)
+                {
+                    instance = FindAnyObjectByType<SniperDuelManager>();
+                    if (instance == null)
+                    {
+                        var go = new GameObject("SniperDuelManager");
+                        instance = go.AddComponent<SniperDuelManager>();
+                    }
+                }
+                return instance;
+            }
+        }
 
         public DuelMatchState MatchState { get; private set; } = DuelMatchState.Idle;
         public int LocalScore { get; private set; } = 0;
@@ -35,12 +51,12 @@ namespace GeoSniper.Duel
 
         private void Awake()
         {
-            if (Instance != null && Instance != this)
+            if (instance != null && instance != this)
             {
                 Destroy(gameObject);
                 return;
             }
-            Instance = this;
+            instance = this;
             DontDestroyOnLoad(gameObject);
         }
 

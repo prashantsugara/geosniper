@@ -5,7 +5,23 @@ namespace GeoSniper.Duel
 {
     public sealed class SniperDuelHUD : MonoBehaviour
     {
-        public static SniperDuelHUD Instance { get; private set; }
+        private static SniperDuelHUD instance;
+        public static SniperDuelHUD Instance
+        {
+            get
+            {
+                if (instance == null)
+                {
+                    instance = FindAnyObjectByType<SniperDuelHUD>();
+                    if (instance == null)
+                    {
+                        var go = new GameObject("SniperDuelHUD");
+                        instance = go.AddComponent<SniperDuelHUD>();
+                    }
+                }
+                return instance;
+            }
+        }
 
         public bool ShowLobbyModal { get; set; } = false;
 
@@ -24,12 +40,12 @@ namespace GeoSniper.Duel
 
         private void Awake()
         {
-            if (Instance != null && Instance != this)
+            if (instance != null && instance != this)
             {
                 Destroy(gameObject);
                 return;
             }
-            Instance = this;
+            instance = this;
             DontDestroyOnLoad(gameObject);
         }
 
@@ -41,8 +57,8 @@ namespace GeoSniper.Duel
 
         private void OnGUI()
         {
-            if (network == null) network = SniperDuelNetwork.Instance;
-            if (duelManager == null) duelManager = SniperDuelManager.Instance;
+            network = SniperDuelNetwork.Instance;
+            duelManager = SniperDuelManager.Instance;
 
             Matrix4x4 prev = GUI.matrix;
             var safe = Screen.safeArea;
@@ -94,18 +110,19 @@ namespace GeoSniper.Duel
             if (CommandGUI.DrawButton(new Rect(modal.x + 20, modal.y + 54, tabW, 36), "HOST DUEL ROOM", selectedTab == 0, 11))
             {
                 selectedTab = 0;
-                if (!network.IsHost) network.StartHost();
+                if (network != null && !network.IsHost) network.StartHost();
             }
             if (CommandGUI.DrawButton(new Rect(modal.x + 20 + tabW, modal.y + 54, tabW, 36), "JOIN DUEL ROOM", selectedTab == 1, 11))
             {
                 selectedTab = 1;
-                network.StartLANDiscovery();
+                network?.StartLANDiscovery();
             }
 
             Rect content = new Rect(modal.x + 20, modal.y + 100, modal.width - 40, modal.height - 120);
 
             if (selectedTab == 0)
             {
+                if (network != null && !network.IsHost) network.StartHost();
                 DrawHostTab(content);
             }
             else
@@ -120,10 +137,12 @@ namespace GeoSniper.Duel
             DrawRect(new Rect(r.x, r.y, 3, 100), CommandGUI.AccentCyan);
 
             DrawLabel(new Rect(r.x + 16, r.y + 12, r.width - 32, 18), "YOUR DUEL ROOM CODE:", 10, CommandGUI.Muted, true);
-            string code = string.IsNullOrEmpty(network.RoomCode) ? "INITIALIZING..." : network.RoomCode;
+            string code = (network != null && !string.IsNullOrEmpty(network.RoomCode)) ? network.RoomCode : "INITIALIZING...";
             DrawLabel(new Rect(r.x + 16, r.y + 32, r.width - 32, 36), code, 24, CommandGUI.AccentCyan, true);
 
-            string ep = string.IsNullOrEmpty(network.PublicEndpointString) ? SniperDuelNetwork.GetLocalIPAddress() + ":7777" : network.PublicEndpointString;
+            string ep = (network != null && !string.IsNullOrEmpty(network.PublicEndpointString)) 
+                ? network.PublicEndpointString 
+                : SniperDuelNetwork.GetLocalIPAddress() + ":7777";
             DrawLabel(new Rect(r.x + 16, r.y + 72, r.width - 32, 16), "LOCAL IP: " + ep + "  //  BROADCASTING ON LAN", 8, CommandGUI.Muted);
 
             // Radar search animation
@@ -165,7 +184,7 @@ namespace GeoSniper.Duel
             Rect listRect = new Rect(r.x, r.y + 98, r.width, r.height - 110);
             DrawRect(listRect, new Color(0.03f, 0.05f, 0.07f, 0.90f));
 
-            if (network.DiscoveredLANHosts.Count == 0)
+            if (network == null || network.DiscoveredLANHosts.Count == 0)
             {
                 DrawLabel(listRect, "NO DUELS FOUND ON LOCAL WI-FI / HOTSPOT.\nHOST A DUEL OR ENTER IP ABOVE.", 10, CommandGUI.Muted, false, TextAnchor.MiddleCenter);
             }
@@ -204,25 +223,31 @@ namespace GeoSniper.Duel
             // Left (You) - Cyan
             DrawRect(new Rect(board.x, board.y, 4, board.height), CommandGUI.AccentCyan);
             DrawLabel(new Rect(board.x + 12, board.y + 6, 90, 14), "OPERATOR", 8, CommandGUI.AccentCyan, true);
-            DrawLabel(new Rect(board.x + 12, board.y + 20, 90, 28), duelManager.LocalScore.ToString(), 20, CommandGUI.AccentCyan, true);
+            int myScore = duelManager != null ? duelManager.LocalScore : 0;
+            DrawLabel(new Rect(board.x + 12, board.y + 20, 90, 28), myScore.ToString(), 20, CommandGUI.AccentCyan, true);
 
             // Center Match Round info
-            string phase = duelManager.MatchState == DuelMatchState.InRound ? $"ROUND {duelManager.LocalScore + duelManager.RivalScore + 1} / {duelManager.TargetScore * 2 - 1}"
-                : duelManager.MatchState.ToString().ToUpper();
+            int rivalScore = duelManager != null ? duelManager.RivalScore : 0;
+            int target = duelManager != null ? duelManager.TargetScore : 3;
+            string phase = (duelManager != null && duelManager.MatchState == DuelMatchState.InRound) 
+                ? $"ROUND {myScore + rivalScore + 1} / {target * 2 - 1}"
+                : (duelManager != null ? duelManager.MatchState.ToString().ToUpper() : "DUEL");
             DrawLabel(new Rect(board.x + 100, board.y + 8, 140, 16), "1v1 SNIPER DUEL", 9, Color.white, true, TextAnchor.MiddleCenter);
             DrawLabel(new Rect(board.x + 100, board.y + 26, 140, 16), phase, 8, CommandGUI.Muted, true, TextAnchor.MiddleCenter);
 
             // Right (Rival) - Red
             DrawRect(new Rect(board.xMax - 4, board.y, 4, board.height), CommandGUI.AccentRed);
-            DrawLabel(new Rect(board.xMax - 102, board.y + 6, 90, 14), network.RemoteCallsign, 8, CommandGUI.AccentRed, true, TextAnchor.MiddleRight);
-            DrawLabel(new Rect(board.xMax - 102, board.y + 20, 90, 28), duelManager.RivalScore.ToString(), 20, CommandGUI.AccentRed, true, TextAnchor.MiddleRight);
+            string rivalName = (network != null && !string.IsNullOrEmpty(network.RemoteCallsign)) ? network.RemoteCallsign : "RIVAL";
+            DrawLabel(new Rect(board.xMax - 102, board.y + 6, 90, 14), rivalName, 8, CommandGUI.AccentRed, true, TextAnchor.MiddleRight);
+            DrawLabel(new Rect(board.xMax - 102, board.y + 20, 90, 28), rivalScore.ToString(), 20, CommandGUI.AccentRed, true, TextAnchor.MiddleRight);
 
             // Latency & Telemetry
-            string pingStr = $"RTT: {network.PingMs}ms // UDP";
+            int ping = network != null ? network.PingMs : 0;
+            string pingStr = $"RTT: {ping}ms // UDP";
             DrawLabel(new Rect(board.x, board.yMax + 4, boardW, 14), pingStr, 7, CommandGUI.Muted, false, TextAnchor.MiddleCenter);
 
             // ── Opponent Scope Glint Lock Warning ────────────────────────────
-            if (duelManager.Opponent != null && duelManager.Opponent.IsAimingAtPlayer)
+            if (duelManager != null && duelManager.Opponent != null && duelManager.Opponent.IsAimingAtPlayer)
             {
                 float flash = 0.6f + Mathf.PingPong(Time.unscaledTime * 5f, 0.4f);
                 Color alertCol = new Color(1.0f, 0.15f, 0.15f, flash);
@@ -235,7 +260,7 @@ namespace GeoSniper.Duel
             }
 
             // ── Center Match Notice (Countdown, Elimination, Victory) ──────
-            if (duelManager.NoticeTimer > 0 && !string.IsNullOrEmpty(duelManager.MatchNotice))
+            if (duelManager != null && duelManager.NoticeTimer > 0 && !string.IsNullOrEmpty(duelManager.MatchNotice))
             {
                 Rect noticeRect = new Rect((w - 460) * 0.5f, h * 0.35f, 460, 70);
                 DrawRect(noticeRect, new Color(0.02f, 0.04f, 0.06f, 0.92f));
@@ -245,7 +270,7 @@ namespace GeoSniper.Duel
             }
 
             // ── Match Over Banner & Action Buttons ──────────────────────────
-            if (duelManager.MatchState == DuelMatchState.MatchOver)
+            if (duelManager != null && duelManager.MatchState == DuelMatchState.MatchOver)
             {
                 Rect overModal = new Rect((w - 360) * 0.5f, h * 0.52f, 360, 110);
                 CommandGUI.DrawPanel(overModal, CommandGUI.ThemeCard, CommandGUI.AccentGold, 1.5f);

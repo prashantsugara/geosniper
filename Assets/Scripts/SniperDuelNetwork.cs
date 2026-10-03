@@ -22,7 +22,23 @@ namespace GeoSniper.Duel
 
     public sealed class SniperDuelNetwork : MonoBehaviour
     {
-        public static SniperDuelNetwork Instance { get; private set; }
+        private static SniperDuelNetwork instance;
+        public static SniperDuelNetwork Instance
+        {
+            get
+            {
+                if (instance == null)
+                {
+                    instance = FindAnyObjectByType<SniperDuelNetwork>();
+                    if (instance == null)
+                    {
+                        var go = new GameObject("SniperDuelNetwork");
+                        instance = go.AddComponent<SniperDuelNetwork>();
+                    }
+                }
+                return instance;
+            }
+        }
 
         public const int DefaultPort = 7777;
         public const int BeaconPort = 7776;
@@ -61,12 +77,12 @@ namespace GeoSniper.Duel
 
         private void Awake()
         {
-            if (Instance != null && Instance != this)
+            if (instance != null && instance != this)
             {
                 Destroy(gameObject);
                 return;
             }
-            Instance = this;
+            instance = this;
             DontDestroyOnLoad(gameObject);
             LocalCallsign = PlayerPrefs.GetString("GeoSniper.PlayerName", "SPECTRE-01").ToUpperInvariant();
         }
