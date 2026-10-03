@@ -16,11 +16,7 @@
     "com.unity.modules.particlesystem": "1.0.0",
     "com.unity.modules.physics": "1.0.0",
     "com.unity.modules.unitywebrequest": "1.0.0",
-    "com.unity.modules.unitywebrequestaudio": "1.0.0",
-    "com.unity.netcode.gameobjects": "2.2.0",
-    "com.unity.services.authentication": "3.3.4",
-    "com.unity.services.core": "1.18.0",
-    "com.unity.services.relay": "1.1.1"
+    "com.unity.modules.unitywebrequestaudio": "1.0.0"
   },
   "scopedRegistries": [
     {
