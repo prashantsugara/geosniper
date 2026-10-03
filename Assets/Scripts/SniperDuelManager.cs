@@ -87,8 +87,26 @@ namespace GeoSniper.Duel
             DamageSystem.OnDamageDealt -= HandleLocalDamageDealt;
         }
 
+        private void EnsureNetwork()
+        {
+            if (network == null)
+            {
+                network = SniperDuelNetwork.Instance;
+                if (network != null)
+                {
+                    network.OnConnected -= HandleConnected;
+                    network.OnDisconnected -= HandleDisconnected;
+                    network.OnPacketReceived -= HandlePacketReceived;
+                    network.OnConnected += HandleConnected;
+                    network.OnDisconnected += HandleDisconnected;
+                    network.OnPacketReceived += HandlePacketReceived;
+                }
+            }
+        }
+
         public void StartDuelMatch(UrbanCombatMission activeMission, bool asHost, string roomCodeOrIp = "")
         {
+            EnsureNetwork();
             mission = activeMission;
             isHost = asHost;
             localPlayer = UrbanPlayer.Instance;

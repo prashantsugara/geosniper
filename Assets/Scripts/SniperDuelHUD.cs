@@ -23,7 +23,23 @@ namespace GeoSniper.Duel
             }
         }
 
-        public bool ShowLobbyModal { get; set; } = false;
+        private bool showLobbyModal = false;
+        public bool ShowLobbyModal
+        {
+            get => showLobbyModal;
+            set
+            {
+                showLobbyModal = value;
+                if (value)
+                {
+                    network = SniperDuelNetwork.Instance;
+                    if (selectedTab == 0 && network != null && !network.IsHost)
+                    {
+                        network.StartHost();
+                    }
+                }
+            }
+        }
 
         private SniperDuelNetwork network;
         private SniperDuelManager duelManager;
@@ -123,7 +139,6 @@ namespace GeoSniper.Duel
 
             if (selectedTab == 0)
             {
-                if (network != null && !network.IsHost) network.StartHost();
                 if (network != null && network.IsConnected)
                 {
                     ShowLobbyModal = false;
@@ -250,6 +265,16 @@ namespace GeoSniper.Duel
 
         private void DrawInMatchHUD(float w, float h)
         {
+            // ── Exit Button during Lobby Wait ────────────────────────────────
+            if (duelManager != null && duelManager.MatchState == DuelMatchState.LobbyWait)
+            {
+                Rect exitBtn = new Rect(16, 12, 130, 32);
+                if (CommandGUI.DrawButton(exitBtn, "✕ EXIT DUEL", false, 9))
+                {
+                    duelManager.LeaveDuel();
+                }
+            }
+
             // ── Top Center Duel Scoreboard ──────────────────────────────────
             float boardW = 340f;
             float boardH = 54f;

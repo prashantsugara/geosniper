@@ -105,6 +105,18 @@ namespace GeoSniper.Duel
                 }
             }
 
+            // Handshake retry for client until connected
+            if (!IsHost && !IsConnected && RemoteEndPoint != null)
+            {
+                if (Time.unscaledTime - lastPingTime > 1.0f)
+                {
+                    lastPingTime = Time.unscaledTime;
+                    int weaponIndex = PlayerPrefs.GetInt("GeoSniper.SelectedWeapon", 0);
+                    byte[] hello = DuelPacketCodec.SerializeHello(LocalCallsign, weaponIndex);
+                    SendRaw(hello);
+                }
+            }
+
             // Ping keep-alive when connected
             if (IsConnected && RemoteEndPoint != null)
             {
@@ -433,6 +445,7 @@ namespace GeoSniper.Duel
             }
 
             IsConnected = false;
+            IsHost = false;
             RemoteEndPoint = null;
             CloseSockets();
             OnDisconnected?.Invoke();

@@ -3619,7 +3619,7 @@ namespace GeoSniper
 
             if (isPvPDuel && currentMissionState == MissionState.InProgress)
             {
-                if (GeoSniper.Duel.SniperDuelNetwork.Instance != null && (GeoSniper.Duel.SniperDuelNetwork.Instance.IsConnected || GeoSniper.Duel.SniperDuelNetwork.Instance.IsHost))
+                if (GeoSniper.Duel.SniperDuelManager.Instance != null && GeoSniper.Duel.SniperDuelManager.Instance.Opponent != null)
                 {
                     DisableAIRivalForMultiplayer();
                     return;

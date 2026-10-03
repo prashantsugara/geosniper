@@ -56,7 +56,16 @@ namespace GeoSniper
         float nextSearch;
         Vector2 locationScroll;
         System.Collections.Generic.List<GameLocation> locations;
-        public static GeoSniperGame Instance { get; private set; }
+        private static GeoSniperGame instance;
+        public static GeoSniperGame Instance
+        {
+            get
+            {
+                if (instance == null) instance = FindAnyObjectByType<GeoSniperGame>();
+                return instance;
+            }
+            private set => instance = value;
+        }
         private bool pendingMultiplayerDuel;
         private bool pendingDuelHost;
         private string pendingDuelTarget = "";
@@ -129,8 +138,18 @@ namespace GeoSniper
                 }
             }
 
-            GameLocation loc = PreferredLocation() ?? activeLocation ?? GameLocation.Default;
-            StartCoroutine(Play(loc));
+            // If an existing sector is already loaded in memory, reuse it immediately
+            if (world != null && cachedSectorReady && world.SpawnPoints != null && world.SpawnPoints.Count > 0)
+            {
+                if (armoryRoom != null) armoryRoom.SetActive(false);
+                if (sectorSun != null) sectorSun.enabled = true;
+                StartCoroutine(ResumeLoadedSector());
+            }
+            else
+            {
+                // Instant deterministic rooftop arena (0 network latency, 0 OSM failure, 100% reliable)
+                StartOffline(preserveContract: true);
+            }
         }
 
         void ExecuteDeploy(bool useLiveLocation=false)
