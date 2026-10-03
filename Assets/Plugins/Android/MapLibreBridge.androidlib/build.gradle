@@ -1,0 +1,21 @@
+apply plugin: 'com.android.library'
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+android {
+    namespace 'com.geosniper.map'
+    compileSdk 36
+    defaultConfig {
+        minSdk 26
+    }
+}
+
+dependencies {
+    // Unity supplies this at runtime. Do not package a second UnityPlayer.
+    compileOnly files('../libs/unity-classes.jar')
+    // The SDK is private to this Java bridge, not a C++ dependency of Unity.
+    implementation 'org.maplibre.gl:android-sdk-opengl:13.4.1'
+}

@@ -1,0 +1,58 @@
+{
+  "durationSeconds": 30,
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "video": "H.264 High, yuv420p, BT.709",
+  "audio": "AAC stereo, 48 kHz, 192 kb/s",
+  "sourceFootage": "issues/issues.mp4",
+  "sourceRecorded": "2026-09-16",
+  "sourceResolution": "1280x576; scaled, no cropped gameplay",
+  "liveDeviceCapture": false,
+  "crossfades": 0.3,
+  "clips": [
+    {
+      "start": 141,
+      "duration": 5,
+      "title": "YOUR CITY. YOUR NEXT MISSION.",
+      "sub": "Sniper missions built from real-world map data.",
+      "topic": "REAL-WORLD MAPS",
+      "credit": true
+    },
+    {
+      "start": 206,
+      "duration": 5.3,
+      "title": "REAL STREETS. A NEW PERSPECTIVE.",
+      "sub": "Explore game environments shaped by mapped buildings and roads.",
+      "topic": "EXPLORE YOUR SECTOR"
+    },
+    {
+      "start": 118,
+      "duration": 5.3,
+      "title": "FIND YOUR OPENING.",
+      "sub": "Track moving targets through your scope.",
+      "topic": "PRECISION AIMING"
+    },
+    {
+      "start": 167.2,
+      "duration": 5.3,
+      "title": "TAKE THE SHOT.",
+      "sub": "Time your aim. Commit when the moment is right.",
+      "topic": "TACTICAL SHOOTING"
+    },
+    {
+      "start": 149,
+      "duration": 5.3,
+      "title": "CHOOSE YOUR NEXT LOCATION.",
+      "sub": "Use GPS nearby, or search for a place by name.",
+      "topic": "GPS + PLACE SEARCH"
+    }
+  ],
+  "originalScore": {
+    "title": "Local Coordinates",
+    "bpm": 96,
+    "samples": "None; generated oscillators and seeded noise"
+  },
+  "artwork": "Built-in image generation with GameLogo.jpg as the branding reference",
+  "completeDecodePassed": true
+}

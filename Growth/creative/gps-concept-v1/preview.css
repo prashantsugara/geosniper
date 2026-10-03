@@ -1,0 +1,57 @@
+:root{font-family:'Segoe UI',Arial,sans-serif;color:#ecf1e9;background:#071314;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0}
+main{display:flex;min-height:100vh;justify-content:center;gap:60px;padding:36px 48px}
+aside{width:410px;padding-top:15px;flex-shrink:0}
+.eyebrow{font-size:11px;letter-spacing:2px;color:#efb557;font-weight:700}
+h1{font-size:42px;line-height:1.12;font-weight:650;letter-spacing:-1.5px;margin:18px 0}
+h2{font-size:14px;margin:22px 0 10px;color:#74e0cd;letter-spacing:1px;text-transform:uppercase}
+p{font-size:13.5px;line-height:1.7;color:#a8bcb7;margin:10px 0}
+.buttons{display:flex;gap:8px;margin:20px 0;flex-wrap:wrap}
+button{font:inherit;font-size:12px;color:#e9f2e9;background:#163230;border:1px solid #3c6761;padding:11px 15px;border-radius:8px;cursor:pointer;transition:all 0.15s ease}
+button:hover{background:#1d423f;border-color:#53857d}
+#play{background:#efb557;color:#091513;font-weight:700;border-color:#efb557}
+#play:hover{background:#f5c575}
+#demoToggle{background:#234a44;color:#74e0cd;font-weight:700;border-color:#74e0cd}
+#demoToggle.active{background:#74e0cd;color:#051415;border-color:#74e0cd}
+label{font-size:12px;display:block;margin-top:14px;color:#9bb4b1;font-weight:600}
+.location-box{display:flex;gap:6px;margin:8px 0 14px}
+#locationInput{flex:1;background:#102527;color:#f3f3e9;border:1px solid #3c6761;padding:10px 12px;border-radius:8px;font-size:12.5px;outline:none;transition:border-color 0.15s ease}
+#locationInput:focus{border-color:#74e0cd;box-shadow:0 0 10px rgba(116,224,205,0.2)}
+#btnSetLocation{background:#224c47;color:#74e0cd;border:1px solid #3d7970;font-weight:700;white-space:nowrap;padding:10px 14px}
+#btnSetLocation:hover{background:#2a5e57;border-color:#74e0cd}
+
+select{width:100%;background:#102527;color:#f3f3e9;border:1px solid #3c6761;padding:10px 12px;border-radius:8px;font-size:13px;margin:8px 0 14px;outline:none;cursor:pointer}
+select:focus{border-color:#74e0cd}
+
+.nearby-container{background:#0c1d20;border:1px solid #234340;border-radius:10px;padding:12px 14px;margin-bottom:16px}
+.nearby-title{font-size:11px;font-weight:700;color:#efb557;letter-spacing:1px;margin-bottom:8px}
+.nearby-list{display:flex;flex-direction:column;gap:6px}
+.nearby-item{display:flex;justify-content:space-between;align-items:center;background:#132d2f;border:1px solid #285450;border-radius:6px;padding:6px 10px;font-size:12px;color:#e8f4f1}
+.nearby-item span.dist{color:#74e0cd;font-weight:600;font-size:11px}
+input[type="range"]{width:100%;accent-color:#efb557;margin:12px 0 6px}
+output{font-size:12px;color:#88aaa3;display:block}
+.chapters{display:grid;gap:6px;margin-top:10px}
+.chapters button{text-align:left;font-size:11.5px;padding:9px 12px}
+.combat-hud{background:#0e2123;border:1px solid #2e534d;border-radius:10px;padding:14px;margin:16px 0;display:none}
+.combat-hud.visible{display:block}
+.combat-hud-title{font-size:12px;color:#efb557;font-weight:700;margin-bottom:8px;display:flex;justify-content:space-between}
+.combat-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn-fire{background:#c73b3b;color:#fff;border-color:#e05252;font-weight:700}
+.btn-fire:hover{background:#e04646}
+.btn-breath{background:#1d3a39;color:#efb557;border-color:#efb557}
+.note{font-size:11.5px;color:#829e96;line-height:1.6;margin-top:18px}
+a{color:#74e0cd;font-size:12px;text-decoration:none}
+a:hover{text-decoration:underline}
+section{display:flex;flex-direction:column;justify-content:center;align-items:center;position:relative}
+canvas{display:block;max-height:calc(100vh - 84px);max-width:calc(100vw - 620px);width:auto;height:auto;object-fit:contain;border:1px solid #35564f;border-radius:15px;box-shadow:0 20px 80px #0007;cursor:default}
+canvas.interactive{cursor:crosshair}
+.canvas-hint{margin-top:8px;font-size:11.5px;color:#74e0cd;display:none;letter-spacing:1px}
+.canvas-hint.visible{display:block}
+@media(max-width:900px){
+  main{padding:16px;gap:20px;flex-direction:column-reverse;align-items:center}
+  aside{width:min(100%,600px);padding:0}
+  canvas{max-height:75vh;max-width:100%;width:auto}
+  section{width:100%}
+  h1{font-size:32px}
+}

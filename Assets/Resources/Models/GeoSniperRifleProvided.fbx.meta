@@ -1,0 +1,27 @@
+fileFormatVersion: 2
+guid: 1552d6bf497e43fbb085ad3f4f9bda4e
+ModelImporter:
+  serializedVersion: 24501
+  externalObjects: {}
+  materials:
+    materialImportMode: 2
+    materialName: 0
+    materialSearch: 1
+    materialLocation: 1
+  animations:
+    legacyGenerateAnimations: 4
+    bakeSimulation: 0
+    resampleCurves: 1
+    optimizeGameObjects: 0
+  meshes:
+    globalScale: 1
+    meshCompression: 0
+    addColliders: 0
+    useSRGBMaterialColor: 1
+    importBlendShapes: 1
+    importCameras: 0
+    importLights: 0
+    preserveHierarchy: 0
+  animationType: 2
+  humanoidOversampling: 1
+  avatarSetup: 0

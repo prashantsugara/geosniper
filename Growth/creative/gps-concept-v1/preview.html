@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Geo Sniper · Global GPS Interactive Combat & Film</title>
+  <link rel="stylesheet" href="preview.css?v=2.2">
+</head>
+<body>
+<main>
+  <aside>
+    <span class="eyebrow">GEO SNIPER // DAILY WORLD OPS</span>
+    <h1>Your city.<br>Your target.</h1>
+    <p>Daily GPS geolocated sniper missions across the globe. Powered by Google Flow 3D satellite dive and real-time tactical combat simulation.</p>
+
+    <!-- Manual Location Input with /location Command Support -->
+    <label for="locationInput">ENTER LOCATION OR /LOCATION COMMAND:</label>
+    <div class="location-box">
+      <input id="locationInput" type="text" placeholder="Type city or /location <city> (e.g. /location Rome, Berlin, 52.52, 13.40)...">
+      <button id="btnSetLocation">📍 Locate</button>
+    </div>
+
+    <!-- Quick Global Presets -->
+    <label for="citySelect">OR SELECT GLOBAL PRESET:</label>
+    <select id="citySelect"></select>
+
+    <!-- Detected Nearby Tactical Sectors -->
+    <div id="nearbyContainer" class="nearby-container">
+      <div class="nearby-title">🗺️ DETECTED NEARBY SECTORS:</div>
+      <div id="nearbyList" class="nearby-list"></div>
+    </div>
+
+    <div class="buttons">
+      <button id="play">Play film</button>
+      <button id="replay">Replay</button>
+      <button id="demoToggle">🎮 Play Demo</button>
+      <button id="aspect">Landscape</button>
+    </div>
+
+    <!-- Live Interactive Combat Controls (Available during Demo mode or Vantage beat) -->
+    <div id="combatHud" class="combat-hud">
+      <div class="combat-hud-title">
+        <span>SNIPER COMBAT OVERWATCH</span>
+        <span id="scoreDisplay">SCORE: 0</span>
+      </div>
+      <div class="combat-buttons">
+        <button id="btnBreath" class="btn-breath">Hold Breath (Space)</button>
+        <button id="btnFire" class="btn-fire">PULL TRIGGER (Click)</button>
+      </div>
+    </div>
+
+    <label for="time">Timeline Scrub (18.0s Sequence with Full Video):</label>
+    <input id="time" type="range" min="0" max="17.99" step="0.01" value="0">
+    <output id="clock">0.0 / 18.0 sec</output>
+
+    <h2>Mission Beats</h2>
+    <div class="chapters">
+      <button data-time="0.0">01 · GPS Location Lock & Nearby Sectors</button>
+      <button data-time="3.5">02 · Google Flow 3D Satellite Dive</button>
+      <button data-time="9.0">03 · ADS Sniper Scope Acquisition</button>
+      <button data-time="11.5">04 · Kill Shot & Target Eliminated (Fire!)</button>
+      <button data-time="13.55">05 · Mission Accomplished & Daily CTA</button>
+    </div>
+
+    <p class="note">Enter any city or GPS coordinates to generate dynamic tactical maps and telemetry. Synchronized with the full Google Flow flight and confirmed kill shot.</p>
+    <a href="/">← Back to Growth Studio</a>
+  </aside>
+
+  <section>
+    <canvas id="film" width="1080" height="1920" aria-label="GeoSniper interactive sniper gameplay and cinematic demo"></canvas>
+    <span id="canvasHint" class="canvas-hint">🎯 DRAG CANVAS TO AIM · CLICK TO SHOOT</span>
+  </section>
+</main>
+
+<script type="module" src="preview.mjs?v=2.2"></script>
+</body>
+</html>

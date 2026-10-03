@@ -1,0 +1,33 @@
+{
+  "dependencies": {
+    "com.google.firebase.app": "file:../GooglePackages/com.google.firebase.app-13.17.0.tgz",
+    "com.google.firebase.analytics": "file:../GooglePackages/com.google.firebase.analytics-13.17.0.tgz",
+    "com.google.ads.mobile": "11.5.0",
+    "com.unity.ai.assistant": "2.19.0-pre.2",
+    "com.unity.ai.inference": "2.6.1",
+    "com.unity.ai.navigation": "2.0.14",
+    "com.unity.services.analytics": "6.3.0",
+    "com.unity.services.cloud-build": "2.0.8",
+    "com.unity.ugui": "1.0.0",
+    "com.unity.modules.androidjni": "1.0.0",
+    "com.unity.modules.animation": "1.0.0",
+    "com.unity.modules.audio": "1.0.0",
+    "com.unity.modules.imageconversion": "1.0.0",
+    "com.unity.modules.particlesystem": "1.0.0",
+    "com.unity.modules.physics": "1.0.0",
+    "com.unity.modules.unitywebrequest": "1.0.0",
+    "com.unity.modules.unitywebrequestaudio": "1.0.0"
+  },
+  "scopedRegistries": [
+    {
+      "name": "package.openupm.com",
+      "url": "https://package.openupm.com",
+      "scopes": [
+        "com.google.ads.mobile",
+        "com.google.external-dependency-manager",
+        "com.ivanmurzak",
+        "extensions.unity"
+      ]
+    }
+  ]
+}

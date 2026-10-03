@@ -1,0 +1,36 @@
+using GeoSniper;
+int checks=0;
+void Check(bool pass,string message) { if(!pass) throw new Exception(message);checks++;Console.WriteLine("PASS: "+message); }
+FirstContactContract Active() {var c=new FirstContactContract();c.Start();return c;}
+var briefing=new FirstContactContract();
+briefing.Tick(120,false,false,false,true);briefing.Shot();briefing.EliminateTarget();
+Check(briefing.Remaining==300 && briefing.Shots==0 && briefing.Phase==ContractPhase.Briefing,"Briefing cannot consume timer, shoot, or skip the objective");
+var contract=Active();contract.Tick(75,false,false,false,true);
+Check(contract.Phase==ContractPhase.Active && contract.Remaining==225,"Entering extraction before target elimination cannot complete the contract");
+contract.Tick(90,true,false,true,true);
+Check(contract.Remaining==225 && !contract.Detected,"Map pauses timer and detection observations");
+contract.Scout();contract.Shot();contract.ResolveShot(false);
+Check(!contract.TargetDown && contract.Phase==ContractPhase.Active,"A miss leaves the marked target objective active");
+contract.Shot();contract.ResolveShot(true);
+Check(!contract.TargetDown && contract.Phase==ContractPhase.Active,"Hits on optional guards do not complete the target objective");
+contract.EliminateTarget();
+Check(contract.Phase==ContractPhase.Extracting && contract.BonusXP==0,"Target death unlocks extraction but gives no completion reward");
+contract.Tick(1,false,false,false,true);contract.Tick(30,true,false,false,true);
+Check(contract.ExtractionHold==1,"Paused map cannot advance extraction hold");
+contract.Tick(.1f,false,false,false,false);
+Check(contract.ExtractionHold==0,"Leaving extraction resets its hold time");
+contract.Tick(1,false,false,true,true);contract.Tick(1,false,false,false,true);
+Check(contract.Phase==ContractPhase.Complete && contract.Detected,"Two uninterrupted seconds finish extraction and retain earlier detection");
+Check(contract.Accuracy==50 && contract.BonusXP==25 && contract.BonusCredits==5,"Scouting reward survives a detected, low-accuracy run");
+float frozen=contract.Remaining;contract.Tick(400,false,true,true,false);contract.Fail("late failure");contract.Shot();
+Check(contract.Phase==ContractPhase.Complete && contract.Remaining==frozen && contract.Shots==2,"Terminal result cannot mutate after completion");
+var perfect=Active();perfect.Scout();perfect.Shot();perfect.ResolveShot(true);perfect.EliminateTarget();perfect.Tick(2,false,false,false,true);
+Check(perfect.BonusXP==100 && perfect.BonusCredits==20,"Perfect run earns scouting, accuracy and stealth bonuses");
+var timedOut=Active();timedOut.EliminateTarget();timedOut.Tick(300,false,false,false,true);
+Check(timedOut.Phase==ContractPhase.Failed && timedOut.BonusXP==0,"Deadline takes priority over a late extraction");
+var dead=Active();dead.Tick(.1f,true,true,false,false);
+Check(dead.Phase==ContractPhase.Failed,"An already downed operator cannot escape failure by opening the map");
+var repeat=new FirstContactContract();repeat.Start();repeat.Tick(25,false,false,false,false);repeat.Start();
+Check(repeat.Remaining==275,"Repeated start cannot refill the countdown");
+var retry=Active();Check(retry.Remaining==300 && retry.Shots==0 && !retry.Scouted && !retry.Detected,"Retry starts with fresh time and bonuses");
+Console.WriteLine($"{checks} contract checks passed.");

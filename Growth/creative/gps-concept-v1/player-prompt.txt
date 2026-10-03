@@ -1,0 +1,8 @@
+Built-in image generation; new fictional person, not an edit of a real person.
+
+Use case: ads-marketing.
+Asset type: cinematic portrait keyframe for a clearly fictional Geo Sniper mobile-game concept promo, later animated with separate interface graphics.
+Primary request: one fictional adult Indian male player, late twenties, short dark hair and a little stubble, wearing a simple dark charcoal jacket, seated indoors near a window at blue hour. He is holding a modern unbranded smartphone vertically in his left hand and his right index finger is poised just above its screen, about to choose a GPS location in a mobile game. Looking down at the phone with a subtle intrigued expression. Natural anatomically believable hands, one phone only.
+Style: polished photorealistic campaign photography with real skin texture, restrained film grain, deep charcoal and petrol teal, warm amber edge lighting. Night city lights softly blurred outside; inviting, not military or aggressive. No weapon, no soldier, no actual gameplay.
+Composition: portrait 9:16 or closest supported portrait ratio, medium shot from head to waist, phone and both hands prominently visible in the lower center, face around upper-middle. Keep the top 15 percent dark and uncluttered for separately composited typography. The phone screen faces mainly toward the player and is not legible.
+Constraints: a wholly fictional person, no resemblance to a celebrity; no text, no logos, no watermark, no UI or map composited into the image; no extra hands or fingers. Strong cinematic lighting and convincing everyday smartphone interaction.

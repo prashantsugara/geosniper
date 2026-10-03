@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Geo Sniper · Growth Studio</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="Geo Sniper Growth Studio"><span class="brand-mark">G<span>+</span></span><span>GEO SNIPER<small>GROWTH STUDIO</small></span></a>
+    <div class="nav-label">WORKSPACE</div>
+    <nav aria-label="Main navigation">
+      <button data-page="overview" class="active"><span>◈</span> Overview</button>
+      <button data-page="calendar"><span>▦</span> Content queue <b id="queue-count">0</b></button>
+      <button data-page="studio"><span>▷</span> Video studio</button>
+      <button data-page="results"><span>↗</span> Results & learning</button>
+      <button data-page="settings"><span>⚙</span> Launch & channels</button>
+    </nav>
+    <div class="sidebar-bottom"><span class="live-dot"></span> LOCAL WORKSPACE<p>No paid tools. No ad spend.<br>You own the content and data.</p><small>Worker runs while this PC is awake.</small></div>
+  </aside>
+  <main>
+    <header><div class="breadcrumb">GEO SNIPER <span>/</span> ORGANIC GROWTH</div><div class="header-status"><span id="release-badge" class="badge">PRE-LAUNCH</span><span class="avatar">GS</span></div></header>
+    <div id="app" aria-live="polite"><p>Opening your workspace…</p></div>
+  </main>
+  <dialog id="editor"><form id="editor-form"><div class="dialog-top"><span class="eyebrow">REVIEW YOUR POST</span><button type="button" id="close-editor" aria-label="Close editor">×</button></div><div id="editor-content"></div></form></dialog>
+  <div id="toast" role="status" hidden></div>
+  <script type="module" src="/app.js"></script>
+</body></html>

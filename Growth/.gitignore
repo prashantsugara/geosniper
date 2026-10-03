@@ -1,0 +1,7 @@
+/data/
+/exports/
+/media/*.mp4
+/media/*.jpg
+/media/*.txt
+.env
+*.log

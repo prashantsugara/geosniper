@@ -1,0 +1,28 @@
+fileFormatVersion: 2
+guid: 240c27e9a5df76445a9d622a13b0cf40
+PluginImporter:
+  externalObjects: {}
+  serializedVersion: 3
+  iconMap: {}
+  executionOrder: {}
+  defineConstraints: []
+  isPreloaded: 0
+  isOverridable: 0
+  isExplicitlyReferenced: 0
+  validateReferences: 1
+  platformData:
+    Any:
+      enabled: 1
+      settings:
+        Exclude Editor: 0
+    Editor:
+      enabled: 1
+      settings:
+        DefaultValueInitialized: true
+    WindowsStoreApps:
+      enabled: 0
+      settings:
+        CPU: AnyCPU
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

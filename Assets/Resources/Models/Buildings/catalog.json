@@ -1,0 +1,46 @@
+[
+  {
+    "name": "CityBlock1",
+    "source": "Assets/3d/building/buildings.glb",
+    "group": "Building_01",
+    "dimensions": [
+      34.05009460449219,
+      19.51007080078125,
+      23.552444458007812
+    ],
+    "triangles": 162
+  },
+  {
+    "name": "CityBlock2",
+    "source": "Assets/3d/building/buildings.glb",
+    "group": "Building_03",
+    "dimensions": [
+      23.193161010742188,
+      17.148197174072266,
+      18.79952621459961
+    ],
+    "triangles": 256
+  },
+  {
+    "name": "CityBlock3",
+    "source": "Assets/3d/building/buildings.glb",
+    "group": "Building_06",
+    "dimensions": [
+      33.45049285888672,
+      18.673622131347656,
+      14.467020034790039
+    ],
+    "triangles": 204
+  },
+  {
+    "name": "CityBlock4",
+    "source": "Assets/3d/building/buildings.glb",
+    "group": "Building_09",
+    "dimensions": [
+      16.891761779785156,
+      13.86383056640625,
+      11.88663101196289
+    ],
+    "triangles": 236
+  }
+]

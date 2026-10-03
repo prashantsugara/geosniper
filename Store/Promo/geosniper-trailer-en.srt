@@ -1,0 +1,29 @@
+1
+00:00:00,000 --> 00:00:04,700
+Your city. Your next mission.
+Sniper missions built from real-world map data.
+
+2
+00:00:05,000 --> 00:00:09,700
+Real streets. A new perspective.
+Explore environments shaped by mapped buildings and roads.
+
+3
+00:00:10,000 --> 00:00:14,700
+Find your opening.
+Track moving targets through your scope.
+
+4
+00:00:15,000 --> 00:00:19,700
+Take the shot.
+Time your aim. Commit when the moment is right.
+
+5
+00:00:20,000 --> 00:00:24,700
+Choose your next location.
+Use GPS nearby, or search for a place by name.
+
+6
+00:00:25,000 --> 00:00:30,000
+Geo Sniper. Your city. Your next mission.
+Sniper missions on real-world maps.

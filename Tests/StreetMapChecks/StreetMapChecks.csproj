@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Assets/Scripts/StreetMapStyle.cs" Link="StreetMapStyle.cs" />
+    <Compile Include="../../Assets/Scripts/MapData.cs" Link="MapData.cs" />
+    <Compile Include="../../Assets/Scripts/MapFeatureStyle.cs" Link="MapFeatureStyle.cs" />
+    <Reference Include="UnityEngine.CoreModule"><HintPath>C:/Program Files/Unity/Hub/Editor/6000.5.0f1/Editor/Data/Managed/UnityEngine/UnityEngine.CoreModule.dll</HintPath></Reference>
+    <Reference Include="Newtonsoft.Json"><HintPath>../../Library/PackageCache/com.unity.nuget.newtonsoft-json@4dfd81071c64/Runtime/Newtonsoft.Json.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

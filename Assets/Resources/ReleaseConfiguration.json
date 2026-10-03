@@ -1,0 +1,19 @@
+{
+  "publisherName": "Geo Sniper",
+  "supportEmail": "bittruth1solutions@gmail.com",
+  "privacyPolicyUrl": "https://github.com/prashantsugara/geosniper/blob/master/Store/PRIVACY_POLICY.md",
+  "adsEnabled": true,
+  "useTestAds": false,
+  "rewardedAdUnitId": "ca-app-pub-2796051533157572/7153408692",
+  "interstitialAdUnitId": "ca-app-pub-2796051533157572/8466490363",
+  "nativeAdUnitId": "ca-app-pub-2796051533157572/2500637800",
+  "liveMapsEnabled": true,
+  "assetRightsVerified": true,
+  "privacyAndDataSafetyReviewed": true,
+  "deviceTestingCompleted": true,
+  "audienceAndContentRatingReviewed": true,
+  "mapProviderUsageReviewed": true,
+  "analyticsEnabled": true,
+  "firebaseAppId": "1:676740822554:android:88356df370653949b9c3a3",
+  "firebaseProjectId": "geosniper-e58dc"
+}

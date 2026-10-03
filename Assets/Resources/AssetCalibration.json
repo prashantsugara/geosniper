@@ -1,0 +1,25 @@
+{
+  "entries": [
+    {"name":"audi","rotation":{"x":0,"y":180,"z":0}},
+    {"name":"Ford","rotation":{"x":0,"y":180,"z":0}},
+    {"name":"Bmw","rotation":{"x":0,"y":180,"z":0}},
+    {"name":"Mazda","rotation":{"x":0,"y":180,"z":0}},
+    {"name":"PoliceCar","rotation":{"x":0,"y":90,"z":0}},
+    {"name":"Tank","rotation":{"x":0,"y":0,"z":0}},
+    {"name":"urban_suv_pbr","rotation":{"x":0,"y":180,"z":0}},
+    {"name":"swat","rotation":{"x":0,"y":0,"z":0},"height":1.85},
+    {"name":"ch35","rotation":{"x":0,"y":0,"z":0},"height":1.85},
+    {"name":"army_character_1","rotation":{"x":0,"y":0,"z":0},"height":1.85},
+    {"name":"army_character_2","rotation":{"x":0,"y":0,"z":0},"height":1.85},
+    {"name":"civilian_modern_men","rotation":{"x":0,"y":0,"z":0},"height":1.85},
+    {"name":"civilian_tf2c","rotation":{"x":0,"y":0,"z":0},"height":1.85},
+    {"name":"female_civilian_v1","rotation":{"x":0,"y":0,"z":0},"height":1.85},
+    {"name":"barrett_50","rotation":{"x":0,"y":90,"z":0}},
+    {"name":"m24_tactical","rotation":{"x":0,"y":90,"z":0}},
+    {"name":"mk12_spr","rotation":{"x":0,"y":90,"z":0}},
+    {"name":"tactical_barricade","rotation":{"x":0,"y":0,"z":0}},
+    {"name":"street_lamp_pbr","rotation":{"x":0,"y":0,"z":0}},
+    {"name":"hvac_rooftop","rotation":{"x":0,"y":0,"z":0}},
+    {"name":"AK47","rotation":{"x":0,"y":180,"z":0}}
+  ]
+}

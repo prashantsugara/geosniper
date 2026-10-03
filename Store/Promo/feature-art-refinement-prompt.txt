@@ -1,0 +1,12 @@
+Use case: text-localization / precise promotional layout edit.
+Edit this completed Geo Sniper feature graphic. Preserve the sniper, city, location pin, amber route, colors, lighting and overall illustration exactly. Only refine the typography and its positioning to protect the central video-play-button area.
+Keep the brand text "GEO SNIPER".
+Replace the main headline with EXACTLY TWO LINES:
+"YOUR CITY."
+"YOUR MISSION."
+Constrain ALL the headline and brand typography to the left 43 percent of the canvas. Keep the headline large and attractive, but never let any letter extend into the central zone (x=44%-58%, y=35%-65%). That area must show only background artwork.
+Supporting text verbatim in two readable lines within that same left column:
+"SNIPER MISSIONS"
+"ON REAL-WORLD MAPS"
+Keep the text no closer than 6 percent of the width to the left edge, with comfortable top and bottom breathing room. Keep a hierarchy: small brand, big white first headline line, amber second headline line, small off-white supporting lines.
+Preserve wide feature-graphic aspect ratio 1024:500, opaque RGB. No other changes, no additional labels, no device or store badges.

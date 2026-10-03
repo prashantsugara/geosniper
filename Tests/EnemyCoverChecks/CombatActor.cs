@@ -1,0 +1,1 @@
+namespace GeoSniper {public class CombatActor:UnityEngine.MonoBehaviour {}}

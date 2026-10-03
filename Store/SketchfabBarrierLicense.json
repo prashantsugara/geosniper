@@ -1,0 +1,35 @@
+{
+  "title": "Concrete Barrier",
+  "source": "https://sketchfab.com/3d-models/concrete-barrier-afaab6285c484c36aab250e06727d471",
+  "creator": "YadroGames",
+  "license": {
+    "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+    "label": "CC Attribution",
+    "fullName": "Creative Commons Attribution",
+    "requirements": "Author must be credited. Commercial use is allowed.",
+    "url": "http://creativecommons.org/licenses/by/4.0/",
+    "slug": "by"
+  },
+  "downloaded": "2026-09-30",
+  "changes": "Split variants; resized textures to 1024; grounded, rotated and scaled meshes for Unity.",
+  "models": [
+    {
+      "name": "BarrierOrange",
+      "triangles": 126,
+      "dimensionsUnity": [
+        0.6,
+        0.95,
+        2.4
+      ]
+    },
+    {
+      "name": "BarrierYellow",
+      "triangles": 126,
+      "dimensionsUnity": [
+        0.6,
+        0.95,
+        2.4
+      ]
+    }
+  ]
+}

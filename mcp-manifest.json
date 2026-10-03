@@ -1,0 +1,11 @@
+{
+  "name": "unity-mcp",
+  "version": "1.0.0",
+  "description": "Unity Editor Control via MCP",
+  "tools": {
+    "unity": {
+      "type": "json_rpc",
+      "endpoint": "http://127.0.0.1:17892/mcp/rpc"
+    }
+  }
+}

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  <application android:allowBackup="false" android:fullBackupContent="false" android:usesCleartextTraffic="false">
+    <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" tools:replace="android:value" />
+    <meta-data android:name="unityplayer.SkipPermissionsDialog" android:value="true" />
+    <!-- Disable AdMob Native Ad Validator debugger dialog on test devices -->
+    <meta-data android:name="com.google.android.gms.ads.flag.NATIVE_AD_DEBUGGER_ENABLED" android:value="false" />
+    <!-- MapLibre brings WorkManager transitively. Disable its automatic database startup;
+         Geo Sniper does not schedule background work and must not crash before Unity loads. -->
+    <provider android:name="androidx.startup.InitializationProvider" tools:node="merge">
+      <meta-data android:name="androidx.work.WorkManagerInitializer" tools:node="remove" />
+    </provider>
+    <activity android:name="com.unity3d.player.UnityPlayerActivity"
+              android:theme="@style/UnityThemeSelector"
+              android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+      <meta-data android:name="unityplayer.UnityActivity" android:value="true" />
+      <meta-data android:name="android.app.lib_name" android:value="game" />
+    </activity>
+  </application>
+</manifest>
