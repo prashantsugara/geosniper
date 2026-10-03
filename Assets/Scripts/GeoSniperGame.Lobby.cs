@@ -373,9 +373,14 @@ namespace GeoSniper
                 {
                     showingModeSelector = true;
                 }
-                if (CommandGUI.DrawButton(new Rect(missCard.x + 14 + mBtnW + 8, missCard.y + 96, mBtnW, 30), "CAMPAIGN MAP ➔", false, 9))
+                if (CommandGUI.DrawButton(new Rect(missCard.x + 14 + mBtnW + 8, missCard.y + 96, mBtnW, 30), "1v1 DUEL ⚔", false, 10))
                 {
-                    SwitchTab(LobbyTab.Campaign);
+                    if (GeoSniper.Duel.SniperDuelHUD.Instance == null)
+                    {
+                        var hudGo = new GameObject("SniperDuelHUD");
+                        hudGo.AddComponent<GeoSniper.Duel.SniperDuelHUD>();
+                    }
+                    GeoSniper.Duel.SniperDuelHUD.Instance.ShowLobbyModal = true;
                 }
 
                 // Primary DEPLOY Button (Glowing Optic Cyan + Amber Accents)

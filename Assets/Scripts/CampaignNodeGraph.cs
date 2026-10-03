@@ -59,7 +59,7 @@ namespace GeoSniper
                 ("FUGITIVE SPRINT", "OP: FAST TRACK", "TIMED RUNNER", colRunner, false, CampaignContractType.TimedInterception, 1.2f, 1f, new int[] { 4 }, "Marked syndicate courier is sprinting toward extraction. Lead your target and eliminate before time expires."),
                 ("SILENT INFILTRATION", "OP: SHADOW VEIL", "STEALTH SYNDICATE", colStealth, false, CampaignContractType.Stealth, -1.2f, 2f, new int[] { 5 }, "Eliminate the marked squad without raising maximum base alert. Time your shots when guards are isolated."),
                 ("HOT EXTRACTION", "OP: RAPID EVAC", "HOT EXTRACTION", colEscape, false, CampaignContractType.Escape, 1.2f, 2f, new int[] { 5 }, "Hold down the extraction zone against approaching search teams until the transport arrives."),
-                ("RIVAL DUEL: GHOST", "OP: GHOST APEX", "AI SNIPER DUEL", colDuel, true, CampaignContractType.TargetIdentification, 0f, 3f, new int[] { 6, 7 }, "Milestone confrontation: defeat rival sniper codenamed GHOST. Dodge incoming laser locks, take cover, and fire back."),
+                ("RIVAL DUEL: GHOST", "OP: GHOST APEX", "AI BOSS MARKSMAN", colDuel, true, CampaignContractType.TargetIdentification, 0f, 3f, new int[] { 6, 7 }, "Milestone confrontation: defeat rival sniper codenamed GHOST. Dodge incoming laser locks, take cover, and fire back."),
 
                 // Chapter 2: Urban Syndicate Operations (Levels 7 - 13, Tier 2 - 3)
                 ("PLAZA WARLORD", "OP: IRON HAMMER", "HVT IDENTIFY", colTarget, false, CampaignContractType.TargetIdentification, -1.2f, 4f, new int[] { 8 }, "Syndicate lieutenant is inspecting a central plaza. Heavily guarded by bodyguards. Neutralize the primary HVT."),
@@ -68,7 +68,7 @@ namespace GeoSniper
                 ("SYNDICATE CELL", "OP: BLACKOUT", "STEALTH SYNDICATE", colStealth, false, CampaignContractType.Stealth, 1.2f, 5f, new int[] { 11 }, "Infiltrate the supply depot. Multiple guards patrolling in pairs. Suppressed rifle recommended."),
                 ("ROOFTOP RESCUE", "OP: ROOFTOP HAVEN", "HOT EXTRACTION", colEscape, false, CampaignContractType.Escape, -1.2f, 6f, new int[] { 12 }, "Survive heavy hostile fire on the helipad rooftop while rescue transport approaches under pressure."),
                 ("DISTRICT PURGE", "OP: SWEEPING FURY", "HVT IDENTIFY", colTarget, false, CampaignContractType.TargetIdentification, 1.2f, 6f, new int[] { 12 }, "Syndicate quartermaster located. Rooftop counter-snipers spotted in the surrounding perimeter."),
-                ("RIVAL DUEL: STALKER", "OP: SHADOW EYE", "AI SNIPER DUEL", colDuel, true, CampaignContractType.TargetIdentification, 0f, 7f, new int[] { 13, 14 }, "Milestone confrontation: Veteran sniper STALKER defends this district with high-caliber armor-piercing rounds."),
+                ("RIVAL DUEL: STALKER", "OP: SHADOW EYE", "AI BOSS MARKSMAN", colDuel, true, CampaignContractType.TargetIdentification, 0f, 7f, new int[] { 13, 14 }, "Milestone confrontation: Veteran sniper STALKER defends this district with high-caliber armor-piercing rounds."),
 
                 // Chapter 3: Industrial Stronghold (Levels 14 - 20, Tier 3 - 4)
                 ("AMBUSH CORRIDOR", "OP: STEEL GRIP", "HVT IDENTIFY", colTarget, false, CampaignContractType.TargetIdentification, -1.2f, 8f, new int[] { 15 }, "Neutralize commander entrenched behind sandbag parapets. Multiple spotters covering sightlines."),
@@ -77,7 +77,7 @@ namespace GeoSniper
                 ("COVERT EXTRACT", "OP: GHOST RUN", "STEALTH SYNDICATE", colStealth, false, CampaignContractType.Stealth, 1.2f, 9f, new int[] { 18 }, "Eliminate guards in manufacturing zone without triggering alarm klaxons."),
                 ("ARMORED TARGET", "OP: HEAVY SHELL", "HVT IDENTIFY", colTarget, false, CampaignContractType.TargetIdentification, -1.2f, 10f, new int[] { 19 }, "Elite syndicate enforcer wearing body armor. Headshots or multiple center-mass hits required."),
                 ("STREET SWEEP", "OP: CLEAR PATH", "HOT EXTRACTION", colEscape, false, CampaignContractType.Escape, 1.2f, 10f, new int[] { 19 }, "Syndicate reinforcements converging on your position. Repel hostiles until extraction arrives."),
-                ("RIVAL DUEL: VIPER", "OP: VIPER NEST", "AI SNIPER DUEL", colDuel, true, CampaignContractType.TargetIdentification, 0f, 11f, new int[] { 20, 21 }, "Milestone confrontation: VIPER repositions between shots. Extremely rapid laser-lock window."),
+                ("RIVAL DUEL: VIPER", "OP: VIPER NEST", "AI BOSS MARKSMAN", colDuel, true, CampaignContractType.TargetIdentification, 0f, 11f, new int[] { 20, 21 }, "Milestone confrontation: VIPER repositions between shots. Extremely rapid laser-lock window."),
 
                 // Chapter 4: Port & Docks Contested Zone (Levels 21 - 27, Tier 5 - 6)
                 ("DOCKS OVERWATCH", "OP: HARBOR GUARDIAN", "VIP OVERWATCH", colOverwatch, false, CampaignContractType.Overwatch, -1.2f, 12f, new int[] { 22 }, "Protect informant navigating cargo container maze. Enemies flank from multiple elevated walkways."),
@@ -86,7 +86,7 @@ namespace GeoSniper
                 ("SECTOR CUTOFF", "OP: ANCHOR BREAK", "HVT IDENTIFY", colTarget, false, CampaignContractType.TargetIdentification, 1.2f, 13f, new int[] { 25 }, "Eliminate arms dealer orchestrating contraband shipment. Bodyguard fire team armed with automatic rifles."),
                 ("CRANE PERCH", "OP: SKYFALL", "HOT EXTRACTION", colEscape, false, CampaignContractType.Escape, -1.2f, 14f, new int[] { 26 }, "Defend the crane staging deck. Hostiles scaling ladders and firing from neighboring container stacks."),
                 ("CROSSFIRE BAY", "OP: SEA BREEZE", "HVT IDENTIFY", colTarget, false, CampaignContractType.TargetIdentification, 1.2f, 14f, new int[] { 26 }, "Engage syndicate captains meeting on pier. High crosswind conditions testing your trajectory adjustments."),
-                ("RIVAL DUEL: COBRA", "OP: COBRA FANG", "AI SNIPER DUEL", colDuel, true, CampaignContractType.TargetIdentification, 0f, 15f, new int[] { 27, 28 }, "Milestone confrontation: Master marksman COBRA. Fires suppressed high-damage rounds with minimal warning."),
+                ("RIVAL DUEL: COBRA", "OP: COBRA FANG", "AI BOSS MARKSMAN", colDuel, true, CampaignContractType.TargetIdentification, 0f, 15f, new int[] { 27, 28 }, "Milestone confrontation: Master marksman COBRA. Fires suppressed high-damage rounds with minimal warning."),
 
                 // Chapter 5: Financial District High-Rise (Levels 28 - 34, Tier 6 - 7)
                 ("DOWNTOWN SIEGE", "OP: GLASS CANYON", "HVT IDENTIFY", colTarget, false, CampaignContractType.TargetIdentification, -1.2f, 16f, new int[] { 29 }, "Syndicate financier barricaded on banking plaza. Multiple sharpshooters on opposite balcony."),
@@ -95,7 +95,7 @@ namespace GeoSniper
                 ("SAFE-HOUSE RUN", "OP: PHANTOM CORRIDOR", "STEALTH SYNDICATE", colStealth, false, CampaignContractType.Stealth, 1.2f, 17f, new int[] { 32 }, "Neutralize security ring around corporate tower without triggering sector-wide lockdown."),
                 ("BARRICADE ASSAULT", "OP: BREAKTHROUGH", "HVT IDENTIFY", colTarget, false, CampaignContractType.TargetIdentification, -1.2f, 18f, new int[] { 33 }, "Target entrenched inside armored outpost. Pick off perimeter guards before taking the leader down."),
                 ("CHOPPER DEFENSE", "OP: IRON RESCUE", "HOT EXTRACTION", colEscape, false, CampaignContractType.Escape, 1.2f, 18f, new int[] { 33 }, "Protect stranded reconnaissance team while gunship provides suppressing air cover."),
-                ("RIVAL DUEL: TITAN", "OP: TITAN LOCK", "AI SNIPER DUEL", colDuel, true, CampaignContractType.TargetIdentification, 0f, 19f, new int[] { 34, 35 }, "Milestone confrontation: Heavy-caliber sniper TITAN. Hits inflict massive shock damage; stay in cover."),
+                ("RIVAL DUEL: TITAN", "OP: TITAN LOCK", "AI BOSS MARKSMAN", colDuel, true, CampaignContractType.TargetIdentification, 0f, 19f, new int[] { 34, 35 }, "Milestone confrontation: Heavy-caliber sniper TITAN. Hits inflict massive shock damage; stay in cover."),
 
                 // Chapter 6: Citadel Infiltration (Levels 35 - 41, Tier 7 - 8)
                 ("PERIMETER SHIELD", "OP: CITADEL GATE", "VIP OVERWATCH", colOverwatch, false, CampaignContractType.Overwatch, -1.2f, 20f, new int[] { 36 }, "Cover friendly assault team breaching perimeter gates. Heavy hostile resistance from fortified bunkers."),
@@ -104,7 +104,7 @@ namespace GeoSniper
                 ("ALLEY PURGE", "OP: RAZOR EDGE", "HVT IDENTIFY", colTarget, false, CampaignContractType.TargetIdentification, 1.2f, 21f, new int[] { 39 }, "Eliminate weapon supplier distributing rocket munitions. Multiple counter-snipers on high ground."),
                 ("BUNKER DEFENSE", "OP: LAST STAND", "HOT EXTRACTION", colEscape, false, CampaignContractType.Escape, -1.2f, 22f, new int[] { 40 }, "Survive three-wave assault from elite syndicate shock-troopers armed with tactical AK rifles."),
                 ("COMMAND POST", "OP: CROWN STRIKE", "HVT IDENTIFY", colTarget, false, CampaignContractType.TargetIdentification, 1.2f, 22f, new int[] { 40 }, "Neutralize regional syndicate commander and his personal security detail."),
-                ("RIVAL DUEL: BLACKOUT", "OP: BLACKOUT STORM", "AI SNIPER DUEL", colDuel, true, CampaignContractType.TargetIdentification, 0f, 23f, new int[] { 41, 42 }, "Milestone confrontation: Elite assassin BLACKOUT. Uses smoke and brief window peaks. Requires sharp reflexes."),
+                ("RIVAL DUEL: BLACKOUT", "OP: BLACKOUT STORM", "AI BOSS MARKSMAN", colDuel, true, CampaignContractType.TargetIdentification, 0f, 23f, new int[] { 41, 42 }, "Milestone confrontation: Elite assassin BLACKOUT. Uses smoke and brief window peaks. Requires sharp reflexes."),
 
                 // Chapter 7: Apex Operations & Black Ops (Levels 42 - 47, Tier 8 - 9)
                 ("EMBASSY UNDER FIRE", "OP: EMBASSY RESCUE", "VIP OVERWATCH", colOverwatch, false, CampaignContractType.Overwatch, -1.2f, 24f, new int[] { 43 }, "Diplomatic compound overrun by insurgent commandos. Cover the diplomatic staff across open grounds."),
@@ -113,7 +113,7 @@ namespace GeoSniper
                 ("LZ EXTRACTION", "OP: HELO RUN", "HOT EXTRACTION", colEscape, false, CampaignContractType.Escape, 1.2f, 25f, new int[] { 46 }, "Defend the extraction point against overwhelming waves of tactical soldiers and counter-snipers."),
                 ("HEAVY BARRAGE", "OP: WAR STORM", "HVT IDENTIFY", colTarget, false, CampaignContractType.TargetIdentification, -1.2f, 26f, new int[] { 47 }, "Defeat the warlord's elite vanguard force. High armor, tactical cover usage, and aggressive return fire."),
                 ("SKYLINE WATCH", "OP: CLOUD PINNACLE", "VIP OVERWATCH", colOverwatch, false, CampaignContractType.Overwatch, 1.2f, 26f, new int[] { 47 }, "Long-distance overwatch across city rooftops. Extreme distance bullet drop and crosswind mastery."),
-                ("RIVAL DUEL: APEX SPIRE", "OP: APEX HORIZON", "AI SNIPER DUEL", colDuel, true, CampaignContractType.TargetIdentification, 0f, 27f, new int[] { 48 }, "Supreme rival duel: The syndicate's master sniper at maximum lethal precision. Sub-second laser lock."),
+                ("RIVAL DUEL: APEX SPIRE", "OP: APEX HORIZON", "AI BOSS MARKSMAN", colDuel, true, CampaignContractType.TargetIdentification, 0f, 27f, new int[] { 48 }, "Supreme rival duel: The syndicate's master sniper at maximum lethal precision. Sub-second laser lock."),
 
                 // Chapter 8: Grand Finale (Levels 49 - 50, Tier 10 - Apex End Game)
                 ("FORTRESS COLLAPSE", "OP: CITADEL FALL", "HVT IDENTIFY", colApex, false, CampaignContractType.TargetIdentification, 0f, 28f, new int[] { 49 }, "Penultimate strike: Infiltrate the warlord's central stronghold. Clear fortified perimeter defenses and outer guards."),
