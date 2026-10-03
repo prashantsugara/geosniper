@@ -25,6 +25,7 @@ namespace GeoSniper
         float reloadTimer;
         float chamberTimer;
         List<Vector3> mapSpawns, rooftopSpawns;
+        public List<Vector3> RooftopSpawns => rooftopSpawns;
         SniperPresentation weapon;
         BallisticsSystem ballistics;
         WeaponSway sway;
@@ -3605,6 +3606,11 @@ namespace GeoSniper
 
             if (isPvPDuel && currentMissionState == MissionState.InProgress)
             {
+                if (GeoSniper.Duel.SniperDuelNetwork.Instance != null && GeoSniper.Duel.SniperDuelNetwork.Instance.IsConnected)
+                {
+                    if (duelLaserLine != null) duelLaserLine.enabled = false;
+                    return;
+                }
                 if (duelRivalSniper != null && duelRivalSniper.GetComponent<CombatActor>().IsDead)
                 {
                     if(!stageRewarded) PlayerPrefs.SetInt("GeoSniper.DuelWins",PlayerPrefs.GetInt("GeoSniper.DuelWins",0)+1);
@@ -3796,6 +3802,12 @@ namespace GeoSniper
             player.ApplyRecoil(rifleIndex==0?140f:rifleIndex==1?95f:60f);
             weapon?.OnShotFired();
             ballistics?.Fire();
+            if (isPvPDuel && GeoSniper.Duel.SniperDuelManager.Instance != null && weapon != null)
+            {
+                var cam = cameraView != null ? cameraView : Camera.main;
+                Vector3 fwd = cam != null ? cam.transform.forward : Vector3.forward;
+                GeoSniper.Duel.SniperDuelManager.Instance.NotifyLocalGunshot(weapon.transform.position, fwd, rifleIndex);
+            }
         }
         static void SpawnHitSparks(Vector3 position)
         {

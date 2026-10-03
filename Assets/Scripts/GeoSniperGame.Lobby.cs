@@ -359,8 +359,8 @@ namespace GeoSniper
                 else
                 {
                     missTitle = "SNIPER DUEL 1v1";
-                    missSub = "ROOFTOP STANDOFF // RIVAL MARKSMAN";
-                    missReward = "+$60,000 Cr   +150 XP";
+                    missSub = "P2P MULTIPLAYER // ROOFTOP STANDOFF";
+                    missReward = "+$60,000 Cr   +200 XP";
                 }
 
                 LobbyLabel(new Rect(missCard.x + 14, missCard.y + 28, rightW - 28, 24), missTitle, 16, Color.white, true);
@@ -380,10 +380,22 @@ namespace GeoSniper
 
                 // Primary DEPLOY Button (Glowing Optic Cyan + Amber Accents)
                 Rect deployBtn = new Rect(rightX, h - navH - 100, rightW, 80);
-                string deployText = "DEPLOY MISSION  ▶";
+                string deployText = mode == 3 ? "ENGAGE 1v1 DUEL  ▶" : "DEPLOY MISSION  ▶";
                 if (CommandGUI.DrawGreenPlayButton(deployBtn, deployText))
                 {
-                    ExecuteDeploy();
+                    if (mode == 3)
+                    {
+                        if (GeoSniper.Duel.SniperDuelHUD.Instance == null)
+                        {
+                            var hudGo = new GameObject("SniperDuelHUD");
+                            hudGo.AddComponent<GeoSniper.Duel.SniperDuelHUD>();
+                        }
+                        GeoSniper.Duel.SniperDuelHUD.Instance.ShowLobbyModal = true;
+                    }
+                    else
+                    {
+                        ExecuteDeploy();
+                    }
                 }
 
                 // Corner Mil-Spec Telemetry Stamps
