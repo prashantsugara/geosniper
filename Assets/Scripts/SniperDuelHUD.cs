@@ -77,6 +77,7 @@ namespace GeoSniper.Duel
             network = SniperDuelNetwork.Instance;
             duelManager = SniperDuelManager.Instance;
 
+            GUI.depth = -100;
             Matrix4x4 prev = GUI.matrix;
             var safe = Screen.safeArea;
             float scale = CommandGUI.GetCanvasScale(safe, out float w, out float h);
@@ -131,8 +132,15 @@ namespace GeoSniper.Duel
             }
             if (CommandGUI.DrawButton(new Rect(modal.x + 20 + tabW, modal.y + 54, tabW, 36), "JOIN DUEL ROOM", selectedTab == 1, 11))
             {
-                selectedTab = 1;
-                network?.StartLANDiscovery();
+                if (selectedTab == 1)
+                {
+                    ExecuteJoinDuel();
+                }
+                else
+                {
+                    selectedTab = 1;
+                    network?.StartLANDiscovery();
+                }
             }
 
             Rect content = new Rect(modal.x + 20, modal.y + 100, modal.width - 40, modal.height - 120);
@@ -189,39 +197,38 @@ namespace GeoSniper.Duel
             }
         }
 
+        private void ExecuteJoinDuel()
+        {
+            string target = !string.IsNullOrWhiteSpace(inputRoomCode) 
+                ? inputRoomCode.Trim() 
+                : (network != null && network.DiscoveredLANHosts.Count > 0 ? network.DiscoveredLANHosts[0].endpoint.ToString() : "127.0.0.1");
+            ShowLobbyModal = false;
+            GeoSniperGame.Instance?.DeployPvPDuel(false, target);
+        }
+
         private void DrawJoinTab(Rect r)
         {
             DrawLabel(new Rect(r.x, r.y, r.width, 18), "ENTER HOST ROOM CODE OR DIRECT IP:", 10, CommandGUI.Muted, true);
 
             GUI.SetNextControlName("RoomCodeInput");
-            inputRoomCode = GUI.TextField(new Rect(r.x, r.y + 24, r.width - 140, 36), inputRoomCode, 32);
+            inputRoomCode = GUI.TextField(new Rect(r.x, r.y + 24, r.width - 160, 36), inputRoomCode, 32);
 
-            Rect joinBtn = new Rect(r.x + r.width - 130, r.y + 24, 130, 36);
-            bool hasCode = !string.IsNullOrWhiteSpace(inputRoomCode);
-            if (CommandGUI.DrawButton(joinBtn, "ENGAGE ➔", hasCode, 11))
+            Rect joinBtn = new Rect(r.x + r.width - 150, r.y + 24, 150, 36);
+            if (CommandGUI.DrawButton(joinBtn, "JOIN DUEL ROOM ➔", true, 10))
             {
-                if (hasCode)
-                {
-                    ShowLobbyModal = false;
-                    GeoSniperGame.Instance?.DeployPvPDuel(false, inputRoomCode.Trim());
-                }
-                else
-                {
-                    joinNotice = "ENTER HOST ROOM CODE (e.g. D-0105) OR DIRECT IP";
-                }
+                ExecuteJoinDuel();
             }
 
             // Status message and quick localhost button
             Rect helperRow = new Rect(r.x, r.y + 64, r.width, 24);
             string tipText = string.IsNullOrEmpty(joinNotice) ? "Format: 'D-XXXX' room code, '192.168.x.x', or '127.0.0.1'" : joinNotice;
-            DrawLabel(new Rect(helperRow.x, helperRow.y, helperRow.width - 170, 22), tipText, 8, string.IsNullOrEmpty(joinNotice) ? CommandGUI.Muted : CommandGUI.AccentGold);
+            DrawLabel(new Rect(helperRow.x, helperRow.y, helperRow.width - 180, 22), tipText, 8, string.IsNullOrEmpty(joinNotice) ? CommandGUI.Muted : CommandGUI.AccentGold);
 
-            Rect localBtn = new Rect(helperRow.xMax - 165, helperRow.y, 165, 22);
-            if (CommandGUI.DrawButton(localBtn, "TEST LOCALHOST (127.0.0.1)", false, 8))
+            Rect localBtn = new Rect(helperRow.xMax - 175, helperRow.y, 175, 22);
+            if (CommandGUI.DrawButton(localBtn, "QUICK JOIN LOCALHOST (127.0.0.1)", false, 8))
             {
                 inputRoomCode = "127.0.0.1";
-                ShowLobbyModal = false;
-                GeoSniperGame.Instance?.DeployPvPDuel(false, "127.0.0.1");
+                ExecuteJoinDuel();
             }
 
             // LAN discovered hosts header

@@ -75,6 +75,15 @@ namespace GeoSniper.Duel
             public IPEndPoint sender;
         }
 
+        private struct DiscoveredBeaconData
+        {
+            public string callsign;
+            public IPEndPoint endpoint;
+            public double latitude;
+            public double longitude;
+        }
+        private readonly ConcurrentQueue<DiscoveredBeaconData> beaconQueue = new ConcurrentQueue<DiscoveredBeaconData>();
+
         private void Awake()
         {
             if (instance != null && instance != this)
@@ -93,6 +102,12 @@ namespace GeoSniper.Duel
             while (incomingQueue.TryDequeue(out var item))
             {
                 ProcessPacket(item.data, item.sender);
+            }
+
+            // Process queued LAN beacon discoveries safely on the main thread
+            while (beaconQueue.TryDequeue(out var b))
+            {
+                UpdateDiscoveredHost(b.callsign, b.endpoint, b.latitude, b.longitude);
             }
 
             // Beacon broadcast for Host
@@ -321,13 +336,22 @@ namespace GeoSniper.Duel
                             double lon = double.Parse(parts[4]);
 
                             IPEndPoint hostEP = new IPEndPoint(sender.Address, port);
-                            UpdateDiscoveredHost(callsign, hostEP, lat, lon);
+                            beaconQueue.Enqueue(new DiscoveredBeaconData
+                            {
+                                callsign = callsign,
+                                endpoint = hostEP,
+                                latitude = lat,
+                                longitude = lon
+                            });
                         }
                     }
                 }
-                BeginBeaconReceive();
             }
             catch { }
+            finally
+            {
+                BeginBeaconReceive();
+            }
         }
 
         private void UpdateDiscoveredHost(string callsign, IPEndPoint ep, double lat, double lon)
