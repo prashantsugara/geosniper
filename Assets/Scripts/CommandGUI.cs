@@ -88,6 +88,30 @@ namespace GeoSniper
             GUI.Label(r, text, GUIStyleCache.Get(fSize, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white, true));
             return IsClicked(r);
         }
+        public static bool DrawGoldPlayButton(Rect r, string text = "DEPLOY")
+        {
+            bool hover = r.Contains(Event.current.mousePosition) && GUI.enabled;
+            float pulse = Mathf.PingPong(Time.realtimeSinceStartup * 2.5f, 1f);
+            Color glow = Color.Lerp(new Color(0.85f, 0.65f, 0.10f, 0.16f), new Color(1.00f, 0.80f, 0.20f, 0.35f), pulse);
+            DrawGlow(new Rect(r.x - 2, r.y - 2, r.width + 4, r.height + 4), glow);
+
+            Color bg = hover ? new Color(0.18f, 0.14f, 0.04f, 0.98f) : new Color(0.12f, 0.09f, 0.02f, 0.96f);
+            Fill(r, bg);
+
+            Color border = Color.Lerp(new Color(0.85f, 0.65f, 0.10f), AccentGold, pulse);
+            Fill(new Rect(r.x, r.y, r.width, 2), border);
+            Fill(new Rect(r.x, r.yMax - 2, r.width, 2), border);
+            Fill(new Rect(r.x, r.y, 3, r.height), border);
+            Fill(new Rect(r.xMax - 3, r.y, 3, r.height), border);
+
+            // Chamfer corner accents
+            Fill(new Rect(r.x + 6, r.y + 4, 8, 2), AccentCyan);
+            Fill(new Rect(r.xMax - 14, r.yMax - 6, 8, 2), AccentCyan);
+
+            int fSize = Mathf.Clamp((int)(r.height * 0.34f), 12, 20);
+            GUI.Label(r, text, GUIStyleCache.Get(fSize, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white, true));
+            return IsClicked(r);
+        }
         public static bool DrawGoldStoreButton(Rect r,string text="STORE") => DrawGreenPlayButton(r,text);
         public static void DrawBadge(Rect r,string text,Color accent,int fontSize=13)
         { Fill(r,new Color(.18f,.17f,.13f)); Label(r,text,fontSize,AccentGold); }

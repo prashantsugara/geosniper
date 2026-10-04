@@ -11,7 +11,9 @@ namespace GeoSniper
         static readonly Color LobbyWhite = CommandGUI.Text;
         static readonly Color LobbyAmber = CommandGUI.AccentGold;
         static readonly string[] LobbyModes = { "CAMPAIGN", "WORLD SECTOR", "GPS RANGE", "SNIPER DUEL" };
-        static readonly string[] LobbyNavigation = { "01  /  OVERVIEW", "02  /  CAMPAIGN", "03  /  ARMORY", "04  /  WORLD MAP", "05  /  REWARDS" };
+        static readonly LobbyTab[] LobbyFooterTabs = { LobbyTab.Home, LobbyTab.Armory, LobbyTab.Location, LobbyTab.Rewards };
+        static readonly string[] LobbyFooterIcons = { "▲", "†", "◉", "★" };
+        static readonly string[] LobbyFooterLabels = { "OVERVIEW", "ARMORY", "SECTOR", "REWARDS" };
         static readonly string[] LobbyWeapons = { "BARRETT .50", "M24 TACTICAL", "MK12 SPR" };
         static readonly string[] LobbyDescriptions = {
             "Work through tactical contracts. Find your target, plan the shot, and complete the objective.",
@@ -306,101 +308,116 @@ namespace GeoSniper
                 LobbyLabel(rotPrompt, "[ DRAG 360° // INSPECT OPERATIVE ]", 8, CommandGUI.Muted, true, TextAnchor.MiddleCenter);
 
                 // Drag to rotate soldier
-                if (Event.current.type == EventType.MouseDown && rotZone.Contains(Event.current.mousePosition) && !loadFailed)
+                if (Event.current.type == EventType.MouseDown && GUI.enabled && rotZone.Contains(Event.current.mousePosition) && !loadFailed)
                 { rotatingLobby = true; Event.current.Use(); }
-                if (Event.current.type == EventType.MouseUp) rotatingLobby = false;
-                if (Event.current.type == EventType.MouseDrag && rotatingLobby)
+                if (!GUI.enabled || Event.current.type == EventType.MouseUp) rotatingLobby = false;
+                if (Event.current.type == EventType.MouseDrag && GUI.enabled && rotatingLobby)
                 { lobbyYaw -= Event.current.delta.x * 0.6f; Event.current.Use(); }
 
                 // ── 4. RIGHT PANEL: DEPLOYMENT CLUSTER ──────────────────────
-                int mode = Mathf.Clamp(PlayerPrefs.GetInt("GeoSniper.SelectedMode", 0), 0, 3);
-                float rightW = 370f;
+                float rightW = 380f;
                 float rightX = w - rightW - 20f;
+                float rightY = topBarH + 16f;
 
-                // Featured Contract Card
-                Rect missCard = new Rect(rightX, h - navH - 260, rightW, 140);
-                LobbyFill(missCard, CommandGUI.ThemeCard);
-                LobbyFill(new Rect(missCard.x, missCard.y, 3, missCard.height), CommandGUI.AccentGold);
-                LobbyFill(new Rect(missCard.x, missCard.y, missCard.width, 1), new Color(CommandGUI.AccentGold.r, CommandGUI.AccentGold.g, CommandGUI.AccentGold.b, 0.40f));
-                LobbyFill(new Rect(missCard.x, missCard.yMax - 1, missCard.width, 1), CommandGUI.ThemeBorder);
+                // ── A. CAMPAIGN OPERATIONS CARD ──
+                float campH = 196f;
+                Rect campCard = new Rect(rightX, rightY, rightW, campH);
+                LobbyFill(campCard, CommandGUI.ThemeCard);
+                LobbyFill(new Rect(campCard.x, campCard.y, 3, campCard.height), CommandGUI.AccentGold);
+                LobbyFill(new Rect(campCard.x, campCard.y, campCard.width, 1), new Color(CommandGUI.AccentGold.r, CommandGUI.AccentGold.g, CommandGUI.AccentGold.b, 0.40f));
+                LobbyFill(new Rect(campCard.x, campCard.yMax - 1, campCard.width, 1), CommandGUI.ThemeBorder);
 
-                LobbyLabel(new Rect(missCard.x + 14, missCard.y + 8, 200, 14), "// TACTICAL CONTRACT // FEATURED", 8, CommandGUI.AccentGold, true);
+                LobbyLabel(new Rect(campCard.x + 14, campCard.y + 8, 220, 14), "// CAMPAIGN // SINGLE PLAYER", 8, CommandGUI.AccentGold, true);
 
                 // Threat Level badge
-                Rect threatBadge = new Rect(missCard.xMax - 120, missCard.y + 6, 106, 18);
-                LobbyFill(threatBadge, new Color(0.20f, 0.05f, 0.05f, 0.90f));
-                LobbyLabel(threatBadge, "THREAT: CRITICAL", 8, CommandGUI.AccentRed, true, TextAnchor.MiddleCenter);
+                Rect campThreatBadge = new Rect(campCard.xMax - 120, campCard.y + 6, 106, 18);
+                LobbyFill(campThreatBadge, new Color(0.20f, 0.05f, 0.05f, 0.90f));
+                LobbyLabel(campThreatBadge, "THREAT: CRITICAL", 8, CommandGUI.AccentRed, true, TextAnchor.MiddleCenter);
 
-                string missTitle = "OPERATION ARCHON";
-                string missSub = "SECTOR 7 // ELIMINATE SYNDICATE VIP";
-                string missReward = "+$45,000 Cr   +120 XP";
-                if (mode == 0)
+                string campTitle = "OPERATION ARCHON";
+                string campSub = "SECTOR 7 // ELIMINATE SYNDICATE VIP";
+                string campReward = "+$45,000 Cr   +120 XP";
+                var cNode = CampaignNodeGraph.GetNode(GetDefaultSelectedNodeId());
+                if (cNode != null)
                 {
-                    var nn = CampaignNodeGraph.GetNode(GetDefaultSelectedNodeId());
-                    if (nn != null)
-                    {
-                        missTitle = nn.codeName;
-                        missSub = nn.title + " // " + nn.enemyCount + " HOSTILES";
-                        missReward = "+$" + nn.rewardCash.ToString("N0") + " Cr   +100 XP";
-                    }
-                }
-                else if (mode == 1)
-                {
-                    missTitle = "REAL-WORLD SECTOR";
-                    missSub = "LIVE SATELLITE GPS COMBAT ZONE";
-                    missReward = "+$35,000 Cr   +90 XP";
-                }
-                else if (mode == 2)
-                {
-                    missTitle = "FIRING RANGE";
-                    missSub = "CALIBRATION & BALLISTIC TARGET DRILLS";
-                    missReward = "PRACTICE DRILLS";
-                }
-                else
-                {
-                    missTitle = "SNIPER DUEL 1v1";
-                    missSub = "P2P MULTIPLAYER // ROOFTOP STANDOFF";
-                    missReward = "+$60,000 Cr   +200 XP";
+                    campTitle = cNode.codeName;
+                    campSub = cNode.title + " // " + cNode.enemyCount + " HOSTILES";
+                    campReward = "+$" + cNode.rewardCash.ToString("N0") + " Cr   +100 XP";
                 }
 
-                LobbyLabel(new Rect(missCard.x + 14, missCard.y + 28, rightW - 28, 24), missTitle, 16, Color.white, true);
-                LobbyLabel(new Rect(missCard.x + 14, missCard.y + 52, rightW - 28, 16), missSub, 9, CommandGUI.AccentCyan, true);
-                LobbyLabel(new Rect(missCard.x + 14, missCard.y + 70, rightW - 28, 16), "REWARD: " + missReward, 9, CommandGUI.AccentGold, true);
+                LobbyLabel(new Rect(campCard.x + 14, campCard.y + 26, rightW - 28, 22), campTitle, 15, Color.white, true);
+                LobbyLabel(new Rect(campCard.x + 14, campCard.y + 48, rightW - 28, 16), campSub, 9, CommandGUI.AccentCyan, true);
+                LobbyLabel(new Rect(campCard.x + 14, campCard.y + 66, rightW - 28, 16), "REWARD: " + campReward, 9, CommandGUI.AccentGold, true);
 
-                // Mode Selector Bar (Row of 3 Quick Buttons)
-                float mBtnW = (rightW - 28 - 8) / 2;
-                if (CommandGUI.DrawButton(new Rect(missCard.x + 14, missCard.y + 96, mBtnW, 30), "MODE: " + LobbyModes[mode], false, 9))
+                // Dedicated PLAY CAMPAIGN Button
+                Rect campPlayBtn = new Rect(campCard.x + 12, campCard.y + 92, campCard.width - 24, 54);
+                if (CommandGUI.DrawGoldPlayButton(campPlayBtn, "PLAY CAMPAIGN  ▶"))
                 {
-                    showingModeSelector = true;
-                }
-                if (CommandGUI.DrawButton(new Rect(missCard.x + 14 + mBtnW + 8, missCard.y + 96, mBtnW, 30), "1v1 DUEL ⚔", false, 10))
-                {
-                    if (GeoSniper.Duel.SniperDuelHUD.Instance == null)
-                    {
-                        var hudGo = new GameObject("SniperDuelHUD");
-                        hudGo.AddComponent<GeoSniper.Duel.SniperDuelHUD>();
-                    }
-                    GeoSniper.Duel.SniperDuelHUD.Instance.ShowLobbyModal = true;
+                    PlayerPrefs.SetInt("GeoSniper.SelectedMode", 0);
+                    PlayerPrefs.Save();
+                    ExecuteDeploy();
                 }
 
-                // Primary DEPLOY Button (Glowing Optic Cyan + Amber Accents)
-                Rect deployBtn = new Rect(rightX, h - navH - 100, rightW, 80);
-                string deployText = mode == 3 ? "ENGAGE 1v1 DUEL  ▶" : "DEPLOY MISSION  ▶";
-                if (CommandGUI.DrawGreenPlayButton(deployBtn, deployText))
+                // Mission Map & Briefing sub-action
+                Rect campMapBtn = new Rect(campCard.x + 12, campPlayBtn.yMax + 8, campCard.width - 24, 32);
+                if (CommandGUI.DrawButton(campMapBtn, "MISSION MAP & BRIEFING ➔", false, 9))
                 {
-                    if (mode == 3)
-                    {
-                        if (GeoSniper.Duel.SniperDuelHUD.Instance == null)
-                        {
-                            var hudGo = new GameObject("SniperDuelHUD");
-                            hudGo.AddComponent<GeoSniper.Duel.SniperDuelHUD>();
-                        }
-                        GeoSniper.Duel.SniperDuelHUD.Instance.ShowLobbyModal = true;
-                    }
-                    else
-                    {
-                        ExecuteDeploy();
-                    }
+                    PlayerPrefs.SetInt("GeoSniper.SelectedMode", 0);
+                    PlayerPrefs.Save();
+                    SwitchTab(LobbyTab.Campaign);
+                }
+
+                // ── B. 1v1 SNIPER DUEL CARD ──
+                float duelH = 196f;
+                Rect duelCard = new Rect(rightX, campCard.yMax + 12f, rightW, duelH);
+                LobbyFill(duelCard, CommandGUI.ThemeCard);
+                LobbyFill(new Rect(duelCard.x, duelCard.y, 3, duelCard.height), CommandGUI.AccentCyan);
+                LobbyFill(new Rect(duelCard.x, duelCard.y, duelCard.width, 1), new Color(CommandGUI.AccentCyan.r, CommandGUI.AccentCyan.g, CommandGUI.AccentCyan.b, 0.40f));
+                LobbyFill(new Rect(duelCard.x, duelCard.yMax - 1, duelCard.width, 1), CommandGUI.ThemeBorder);
+
+                LobbyLabel(new Rect(duelCard.x + 14, duelCard.y + 8, 220, 14), "// MULTIPLAYER // 1v1 DUEL", 8, CommandGUI.AccentCyan, true);
+
+                // P2P badge
+                Rect duelBadge = new Rect(duelCard.xMax - 120, duelCard.y + 6, 106, 18);
+                LobbyFill(duelBadge, new Color(0.04f, 0.16f, 0.18f, 0.90f));
+                LobbyLabel(duelBadge, "P2P LIVE COMBAT", 8, CommandGUI.AccentCyan, true, TextAnchor.MiddleCenter);
+
+                LobbyLabel(new Rect(duelCard.x + 14, duelCard.y + 26, rightW - 28, 22), "SNIPER DUEL 1v1", 15, Color.white, true);
+                LobbyLabel(new Rect(duelCard.x + 14, duelCard.y + 48, rightW - 28, 16), "ROOFTOP STANDOFF // HOST OR JOIN ROOM", 9, CommandGUI.AccentCyan, true);
+                LobbyLabel(new Rect(duelCard.x + 14, duelCard.y + 66, rightW - 28, 16), "REWARD: +$60,000 Cr   +200 XP", 9, CommandGUI.AccentGold, true);
+
+                // Dedicated ENTER 1v1 DUEL Button
+                Rect duelPlayBtn = new Rect(duelCard.x + 12, duelCard.y + 92, duelCard.width - 24, 54);
+                if (CommandGUI.DrawGreenPlayButton(duelPlayBtn, "ENTER 1v1 DUEL  ⚔"))
+                {
+                    OpenDuelLobby();
+                }
+
+                // Duel Room & Practice sub-action
+                Rect duelRoomBtn = new Rect(duelCard.x + 12, duelPlayBtn.yMax + 8, duelCard.width - 24, 32);
+                if (CommandGUI.DrawButton(duelRoomBtn, "HOST / JOIN / PRACTICE BOT ➔", false, 9))
+                {
+                    OpenDuelLobby();
+                }
+
+                // ── C. QUICK UTILITY MODES STRIP ──
+                float utilY = duelCard.yMax + 10f;
+                float halfW = (rightW - 10f) * 0.5f;
+                Rect worldSectorBtn = new Rect(rightX, utilY, halfW, 36f);
+                Rect rangeBtn = new Rect(rightX + halfW + 10f, utilY, halfW, 36f);
+
+                if (CommandGUI.DrawButton(worldSectorBtn, "🌐 GPS SECTOR", false, 9))
+                {
+                    PlayerPrefs.SetInt("GeoSniper.SelectedMode", 1);
+                    PlayerPrefs.Save();
+                    ExecuteDeploy();
+                }
+
+                if (CommandGUI.DrawButton(rangeBtn, "🎯 FIRING RANGE", false, 9))
+                {
+                    PlayerPrefs.SetInt("GeoSniper.SelectedMode", 2);
+                    PlayerPrefs.Save();
+                    ExecuteDeploy();
                 }
 
                 // Corner Mil-Spec Telemetry Stamps
@@ -419,10 +436,8 @@ namespace GeoSniper
                 }
 
                 // ── 6. BOTTOM NAVIGATION BAR ────────────────────────────────
-                string[] navIcons  = { "▲", "≡", "†", "◉", "★" };
-                string[] navLabels = { "OVERVIEW", "CAMPAIGN", "ARMORY", "SECTOR", "REWARDS" };
-                int navClicked = CommandGUI.DrawNavBar(new Rect(0, h - navH, w, navH), navIcons, navLabels, 0);
-                if (navClicked > 0) SwitchTab((LobbyTab)navClicked);
+                int navClicked = CommandGUI.DrawNavBar(new Rect(0, h - navH, w, navH), LobbyFooterIcons, LobbyFooterLabels, 0);
+                if (navClicked > 0 && navClicked < LobbyFooterTabs.Length) SwitchTab(LobbyFooterTabs[navClicked]);
             }
             finally { GUI.matrix = previous; }
         }
