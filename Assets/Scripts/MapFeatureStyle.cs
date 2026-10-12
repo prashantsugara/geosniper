@@ -122,6 +122,7 @@ namespace GeoSniper
         public static string Category(MapFeature f)
         {
             string c=Text(f,"category");
+            if(c.Length==0)c=Text(f,"shop");
             if(f.Landmark=="fuel" || c.Contains("gas_station") || c.Contains("petrol")) return "PETROL STATION";
             if(f.Landmark=="police" || c.Contains("police")) return "POLICE STATION";
             if(c.Contains("fitness") || c.Contains("gym")) return "GYM";
@@ -219,7 +220,7 @@ namespace GeoSniper
         {
             var details=new JObject();
             if(!(value is JObject obj)) return details;
-            foreach(string key in new[]{"oneway","junction","driving_side","class","surface","width","category","num_floors","facade_color","facade_material","roof_shape","roof_color","roof_material","roof_height","min_height","subtype","level","is_bridge","brand","id","building_id","has_parts","is_part","water_id","water_class","landuse","natural","leisure"})
+            foreach(string key in new[]{"oneway","junction","driving_side","class","surface","width","category","shop","num_floors","height_source","facade_color","facade_material","roof_shape","roof_color","roof_material","roof_height","min_height","subtype","level","is_bridge","brand","id","building_id","has_parts","is_part","water_id","water_class","landuse","natural","leisure"})
             {
                 var v=obj[key];
                 if(v==null || v.Type==JTokenType.Object || v.Type==JTokenType.Array) continue;

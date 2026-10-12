@@ -1,0 +1,48 @@
+{
+  "downloaded": "2026-10-05",
+  "license": "CGTrader Royalty Free License (no AI)",
+  "usage": "Embedded rendered game assets; no standalone model redistribution. Not used for AI training.",
+  "models": [
+    {
+      "title": "Desert Eagle Gun Model 4K",
+      "creator": "AmanDeep0707",
+      "source": "https://www.cgtrader.com/free-3d-models/military/gun/desert-eagle-gun-model-4k",
+      "modelId": 2797447,
+      "gameAsset": "EagleSidearm",
+      "changes": "Mobile decimation to 43538 triangles, normalized scale and grip marker, textures resized to 1024, metallic/roughness converted to Unity metallic/smoothness."
+    },
+    {
+      "title": "M4A1 Rifle",
+      "creator": "mminhnghii02",
+      "source": "https://www.cgtrader.com/free-3d-models/military/gun/m4a1-rifle-fb11d84c-7353-4763-96a4-b1acd1c03513",
+      "modelId": 6364104,
+      "gameAsset": "M16Assault",
+      "changes": "Replaces the M16 visual with M4A1; stable weapon ID and progression retained. Static 12064 triangle mesh, normalized scale and grip marker, textures resized to 1024, metallic/roughness converted to Unity metallic/smoothness."
+    },
+    {
+      "title": "Game ready MP5 submachine gun",
+      "creator": "Fallxhore",
+      "source": "https://www.cgtrader.com/free-3d-models/military/gun/game-ready-mp5-submachine-gun-f50b9091-bb8e-41b1-bf34-e7bab69fb57c",
+      "modelId": 6302388,
+      "gameAsset": "MP5Compact",
+      "changes": "Removed loose cartridges, static 14348 triangle model, normalized scale and grip; 1024px PBR maps."
+    },
+    {
+      "title": "M40 Sniper",
+      "creator": "Yahia-DdZ",
+      "source": "https://www.cgtrader.com/free-3d-models/military/gun/m40-sniper",
+      "modelId": 2467399,
+      "gameAsset": "M40Scout",
+      "changes": "Removed hanging sling and small lettering, welded geometry and decimated to 46638 triangles, normalized scale and grip, repaired invalid UVs, 1024px packed surface textures."
+    },
+    {
+      "title": "Dragunov SVD Sniper rifle",
+      "creator": "Yahia-DdZ",
+      "source": "https://www.cgtrader.com/free-3d-models/military/gun/dragunov-svd-sniper-rifle-7ec65bd7-6d3c-4039-b7a4-f5b0315cffe6",
+      "modelId": 2436385,
+      "gameAsset": "SVDMarksman",
+      "changes": "Static 37151 triangle model, normalized scale and grip. Download lacked source textures; planar UVs and licensed M40 metal and stock surface maps adapted for this model."
+    }
+  ],
+  "licenseReference": "https://help.cgtrader.com/hc/en-us/articles/360015124437-Royalty-Free-License"
+}

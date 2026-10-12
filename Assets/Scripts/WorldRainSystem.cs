@@ -192,6 +192,12 @@ namespace GeoSniper
             if(!active || !isHeavy) { lightningUntil=0; if(stormLight!=null) stormLight.enabled=false; }
             if (_rainParticleSystem != null)
             {
+                bool pilot=SectorWorld.ActiveFeatures!=null && SectorWorld.ActiveFeatures.Exists(f=>MapFeatureStyle.Text(f,"street_study")=="true");
+                var main=_rainParticleSystem.main;
+                main.startSize=pilot?.035f:.075f;
+                main.startColor=pilot?new Color(.64f,.72f,.78f,.38f):new Color(.78f,.87f,1f,.72f);
+                var renderer=_rainParticleSystem.GetComponent<ParticleSystemRenderer>();
+                renderer.velocityScale=pilot?.035f:.06f;renderer.lengthScale=pilot?1.1f:1.6f;
                 var velocity=_rainParticleSystem.velocityOverLifetime;
                 velocity.x=new ParticleSystem.MinMaxCurve(isHeavy?-8f:-3f,isHeavy?-5f:-1f);
                 var emission = _rainParticleSystem.emission;

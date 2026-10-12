@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using GeoSniper.Duel;
 
 namespace GeoSniper
 {
@@ -34,8 +35,13 @@ namespace GeoSniper
             }
             return feature.Points[feature.Points.Count-1];
         }
-        static GUIStyle MapText(int size,Color color,bool bold=false) => new GUIStyle(GUI.skin.label) {
-            fontSize=size,fontStyle=bold?FontStyle.Bold:FontStyle.Normal,normal={textColor=color},wordWrap=false };
+        static GUIStyle MapText(int size,Color color,bool bold=false)
+        {
+            var style=new GUIStyle(GUI.skin.label){fontSize=size,fontStyle=bold?FontStyle.Bold:FontStyle.Normal,wordWrap=false};
+            // The inherited hover colour was white, hiding pin labels on the pale map.
+            foreach(var state in new[]{style.normal,style.hover,style.active,style.focused,style.onNormal,style.onHover,style.onActive,style.onFocused})state.textColor=color;
+            return style;
+        }
         static void MapFill(Rect rect,Color color) { GUI.color=color; GUI.DrawTexture(rect,Texture2D.whiteTexture);GUI.color=Color.white; }
         int MapSignature()
         {
@@ -88,13 +94,90 @@ namespace GeoSniper
             GUI.DrawTextureWithTexCoords(rect,streetMinimap,new Rect(.5f+delta.x/320-span/640,
                 .5f+delta.z/320-span/640,span/320,span/320));
         }
+        bool TryGetDuelMapRival(out DuelOpponentAvatar rival)
+        {
+            rival=SniperDuelManager.ActiveOpponent;
+            var duel=SniperDuelManager.ActiveInstance;
+            return MultiplayerDuel && duel!=null && duel.MatchState==DuelMatchState.InRound && duel.RivalTrackingVisible &&
+                player!=null && player.Health!=null && !player.Health.IsDead && rival!=null && !rival.IsDead && rival.gameObject.activeInHierarchy;
+        }
+        static string DuelMapHeight(float metres) => metres>3f ? $"ABOVE {metres:F0}m" : metres< -3f ? $"BELOW {-metres:F0}m" : "SAME LEVEL";
+        void FocusDuelMap(Vector3 rivalPosition)
+        {
+            Vector3 position=player.transform.position;
+            mapBrowseCenter=(position+rivalPosition)*.5f;
+            Vector3 delta=rivalPosition-position;
+            mapSpan=Mathf.Clamp(Mathf.Max(Mathf.Abs(delta.x),Mathf.Abs(delta.z))*1.35f+70f,120f,2400f);
+        }
+        // Preserve the bearing even when the rival is outside the visible map.
+        static Vector2 ClampDuelMapPoint(Rect rect,Vector2 point,float inset)
+        {
+            Vector2 center=rect.center,offset=point-center;
+            float halfWidth=Mathf.Max(1f,rect.width*.5f-inset),halfHeight=Mathf.Max(1f,rect.height*.5f-inset);
+            float overflow=Mathf.Max(Mathf.Abs(offset.x)/halfWidth,Mathf.Abs(offset.y)/halfHeight);
+            return overflow>1f ? center+offset/overflow : point;
+        }
+        void DrawDuelArenaRing(Rect rect, Vector2 center, float radius)
+        {
+            var duel = SniperDuelManager.ActiveInstance;
+            if (!MultiplayerDuel || duel == null || duel.MatchState != DuelMatchState.InRound) return;
+            GUI.BeginGroup(rect);
+            center -= rect.position;
+            GUI.color = new Color(1f, .65f, .2f, .6f);
+            Vector2 previous = center + Vector2.right * radius;
+            for (int i = 1; i <= 48; i++)
+            {
+                float angle = i * Mathf.PI * 2f / 48;
+                Vector2 point = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+                DrawMapLine(previous, point, 2f); previous = point;
+            }
+            GUI.EndGroup(); GUI.color = Color.white;
+        }
+        void DrawDuelMapMarker(Rect rect,Vector2 projected,Vector2 observer,Vector3 delta,bool compact)
+        {
+            Vector2 point=ClampDuelMapPoint(rect,projected,compact?14f:20f);
+            bool edge=(point-projected).sqrMagnitude>.1f;
+            Color red=new Color(1f,.22f,.18f);
+            GUI.color=new Color(red.r,red.g,red.b,.6f);
+            DrawMapLine(observer,point,compact?1.2f:2f);
+            float radius=compact?8f:12f;
+            float pulse=1f+Mathf.PingPong(Time.unscaledTime*1.6f,1f)*.25f;
+            var top=point+Vector2.up*radius*pulse;
+            var right=point+Vector2.right*radius*pulse;
+            var bottom=point+Vector2.down*radius*pulse;
+            var left=point+Vector2.left*radius*pulse;
+            GUI.color=new Color(.04f,.015f,.02f,.95f);
+            DrawMapLine(top,right,compact?5f:7f);DrawMapLine(right,bottom,compact?5f:7f);
+            DrawMapLine(bottom,left,compact?5f:7f);DrawMapLine(left,top,compact?5f:7f);
+            GUI.color=red;
+            DrawMapLine(top,right,compact?3f:4f);DrawMapLine(right,bottom,compact?3f:4f);
+            DrawMapLine(bottom,left,compact?3f:4f);DrawMapLine(left,top,compact?3f:4f);
+            MapFill(new Rect(point.x-3f,point.y-3f,6f,6f),Color.white);
+            if(edge)
+            {
+                Vector2 direction=(projected-point).normalized,rightOfDirection=new Vector2(-direction.y,direction.x);
+                Vector2 tip=point+direction*(radius+5f);
+                GUI.color=red;
+                DrawMapLine(tip,tip-direction*6f+rightOfDirection*4f,3f);
+                DrawMapLine(tip,tip-direction*6f-rightOfDirection*4f,3f);
+            }
+            float labelWidth=Mathf.Min(compact?62f:190f,rect.width-6f),labelHeight=compact?18f:40f;
+            float labelX=Mathf.Clamp(point.x-labelWidth*.5f,rect.x+3f,Mathf.Max(rect.x+3f,rect.xMax-labelWidth-3f));
+            float labelY=point.y+radius+5f;
+            if(labelY+labelHeight>rect.yMax-3f) labelY=point.y-radius-labelHeight-5f;
+            var label=new Rect(labelX,Mathf.Max(rect.y+3f,labelY),labelWidth,labelHeight);
+            MapFill(label,new Color(.1f,.015f,.025f,.96f));
+            GUI.Label(label,compact ? "RIVAL" : $"RIVAL {delta.magnitude:F0}m\n{DuelMapHeight(delta.y)}"+(edge?" / OFF MAP":""),
+                GUIStyleCache.Get(compact?9:13,FontStyle.Bold,TextAnchor.MiddleCenter,Color.white));
+            GUI.color=Color.white;
+        }
         void DrawTacticalMap(float width,float height)
         {
             if(player==null) return;
-            var ink=new Color(.20f,.25f,.30f);
-            var muted=new Color(.40f,.45f,.48f);
-            var blue=new Color(.10f,.40f,.83f);
-            MapFill(new Rect(0,0,width,height),new Color(.96f,.97f,.98f));
+            var ink=new Color(.83f,.94f,.93f);
+            var muted=new Color(.55f,.71f,.72f);
+            var blue=new Color(.12f,.90f,.68f);
+            MapFill(new Rect(0,0,width,height),new Color(.025f,.055f,.065f));
             var rect=TacticalRect();
             int signature=MapSignature();RefreshMapPlaces(signature);
             var viewport=new StreetMapViewport(rect,mapBrowseCenter,mapSpan);
@@ -145,7 +228,7 @@ namespace GeoSniper
                 if(!local.Rect.Contains(p)) continue;
                 bool isRoad=place.Kind=="road";
                 if(isRoad && local.Scale<.9f) continue;
-                Color color=place.Kind=="place"?new Color(.52f,.30f,.59f):place.Kind=="park"?new Color(.23f,.47f,.27f):isRoad?new Color(.30f,.36f,.42f):
+                Color color=place.Kind=="place"?new Color(.78f,.68f,.89f):place.Kind=="park"?new Color(.50f,.78f,.54f):isRoad?new Color(.71f,.81f,.81f):
                     place.Category.Length>0?place.Color:muted;
                 if(!isRoad)
                 {
@@ -160,17 +243,26 @@ namespace GeoSniper
                     var area=new Rect(p.x+dx,p.y+dy,labelWidth,22);
                     if(area.x<4 || area.y<4 || area.xMax>rect.width-4 || area.yMax>rect.height-4 || mapLabelAreas.Exists(a=>a.Overlaps(area))) continue;
                     mapLabelAreas.Add(new Rect(area.x-3,area.y-2,area.width+6,area.height+4));
-                    MapFill(area,new Color(1,1,1,isRoad?.68f:.86f));text.normal.textColor=color;
+                    MapFill(area,new Color(.02f,.045f,.06f,isRoad?.78f:.94f));text.normal.textColor=color;
                     GUI.Label(area,new GUIContent(place.Name,place.Name),text);break;
                 }
             }
             Vector2 operatorPos=local.Project(player.transform.position);
-            if(hasWaypointPin)
+            if(stageMode && StoryFieldMode)foreach(var objective in storyPoints)
+            {
+                if(objective.Done)continue;
+                var destination=ClampDuelMapPoint(new Rect(0,0,rect.width,rect.height),local.Project(objective.Position),20);
+                DrawWaypointPath(operatorPos,destination,blue);DrawWaypointIcon(destination,blue);
+                GUI.Label(new Rect(destination.x+12,destination.y-25,230,44),(activeContract.Type==CampaignContractType.Sabotage?"RELAY // INSIDE":"DOCUMENTS // INSIDE")+"\n"+Mathf.RoundToInt(Vector3.Distance(player.transform.position,objective.Position))+"m",MapText(12,blue,true));
+            }
+
+            if(hasWaypointPin && (!TryGetExtractionDestination(out var sameExit) || (waypointPinPos-sameExit).sqrMagnitude>1))
             {
                 var pin=local.Project(waypointPinPos);
                 DrawWaypointPath(operatorPos,pin,blue);
                 DrawWaypointIcon(pin,blue);
-                GUI.Label(new Rect(pin.x+12,pin.y-30,240,44),waypointPin.Name+"\n"+PinGuidance(),MapText(13,blue,true));
+                float labelOffset=TryGetExtractionDestination(out var labelExit) && (local.Project(labelExit)-pin).sqrMagnitude<160*160?-82:-30;
+                GUI.Label(new Rect(Mathf.Clamp(pin.x+12,4,Mathf.Max(4,rect.width-244)),Mathf.Clamp(pin.y+labelOffset,4,Mathf.Max(4,rect.height-48)),240,44),waypointPin.Name+"\n"+PinGuidance(),MapText(13,blue,true));
             }
             foreach(var enemy in enemies)
             {
@@ -178,12 +270,18 @@ namespace GeoSniper
                 var p=local.Project(enemy.transform.position);
                 MapFill(new Rect(p.x-4,p.y-4,8,8),new Color(.86f,.20f,.16f));
             }
-            if(currentMissionState==MissionState.Extraction)
+            if(TryGetExtractionDestination(out var mapExit))
             {
-                var p=local.Project(extractionPoint);MapFill(new Rect(p.x-6,p.y-6,12,12),new Color(.18f,.62f,.27f));
-                GUI.Label(new Rect(p.x+9,p.y-12,120,24),"Extraction",MapText(14,ink,true));
+                var p=ClampDuelMapPoint(new Rect(0,0,rect.width,rect.height),local.Project(mapExit),20);
+                var exitColor=new Color(.12f,.7f,.35f);
+                DrawWaypointPath(operatorPos,p,exitColor);DrawWaypointIcon(p,exitColor);
+                GUI.Label(new Rect(Mathf.Clamp(p.x+9,4,Mathf.Max(4,rect.width-184)),Mathf.Clamp(p.y+8,4,Mathf.Max(4,rect.height-48)),180,44),"EXTRACTION\n"+Mathf.RoundToInt(Vector3.Distance(player.transform.position,mapExit))+" m",MapText(13,exitColor,true));
             }
             DrawFirstContactMap(local);
+            var arena=SniperDuelManager.ActiveInstance;
+            if(MultiplayerDuel && arena!=null) DrawDuelArenaRing(local.Rect,local.Project(arena.ArenaCenter),arena.ArenaRadius*local.Scale);
+            bool hasDuelRival=TryGetDuelMapRival(out var mapRival);
+            if(hasDuelRival) DrawDuelMapMarker(local.Rect,local.Project(mapRival.transform.position),operatorPos,mapRival.transform.position-player.transform.position,false);
             DrawModernPlayerMarker(operatorPos,18);
             GUI.EndGroup();
 
@@ -215,11 +313,19 @@ namespace GeoSniper
             if(search!=mapSearch) {mapSearch=search;mapScroll=Vector2.zero;}
             matchingPlaces.Clear();
             foreach(var place in mapPlaces) if(string.IsNullOrWhiteSpace(mapSearch) || place.Name.IndexOf(mapSearch,StringComparison.OrdinalIgnoreCase)>=0) matchingPlaces.Add(place);
-            GUI.Label(new Rect(16,128,panel,24),matchingPlaces.Count+" locations in loaded area",MapText(13,muted));
-            var listRect=new Rect(12,160,panel,Mathf.Max(30,height-204));
+            float directoryTop=160f;
+            if(hasDuelRival)
+            {
+                Vector3 rivalDelta=mapRival.transform.position-player.transform.position;
+                var findRect=new Rect(16,128,panel-8,50);
+                if(TacticalGUI.DrawButton(findRect,$"FIND RIVAL / {rivalDelta.magnitude:F0}m\n{DuelMapHeight(rivalDelta.y)}",true,12)) FocusDuelMap(mapRival.transform.position);
+                GUI.Label(new Rect(16,184,panel,24),matchingPlaces.Count+" locations in loaded area",MapText(13,muted));
+                directoryTop=216f;
+            }
+            else GUI.Label(new Rect(16,128,panel,24),matchingPlaces.Count+" locations in loaded area",MapText(13,muted));
+            var listRect=new Rect(12,directoryTop,panel,Mathf.Max(30,height-directoryTop-44));
             mapScroll=GUI.BeginScrollView(listRect,mapScroll,new Rect(0,0,panel-20,matchingPlaces.Count*62));
-            var rowStyle=new GUIStyle(GUI.skin.button){alignment=TextAnchor.MiddleLeft,fontSize=14,wordWrap=true,
-                normal={textColor=ink,background=Texture2D.whiteTexture},hover={textColor=blue,background=Texture2D.whiteTexture}};
+            var rowStyle=new GUIStyle(GameButtonChrome.Style(GameButtonTone.Steel,14)){alignment=TextAnchor.MiddleLeft};
             // Only paint visible rows; the full directory remains scrollable and searchable.
             int start=Mathf.Max(0,Mathf.FloorToInt(mapScroll.y/62));
             int end=Mathf.Min(matchingPlaces.Count,Mathf.CeilToInt((mapScroll.y+listRect.height)/62));
@@ -234,8 +340,8 @@ namespace GeoSniper
                 }
             }
             GUI.EndScrollView();
-            if(matchingPlaces.Count==0) GUI.Label(new Rect(16,170,panel-12,64),mapPlaces.Count==0?"Place data is still loading.":"No matching locations.",new GUIStyle(MapText(14,muted)){wordWrap=true});
-            var button=new GUIStyle(GUI.skin.button){fontSize=14};
+            if(matchingPlaces.Count==0) GUI.Label(new Rect(16,directoryTop+10,panel-12,64),mapPlaces.Count==0?"Place data is still loading.":"No matching locations.",new GUIStyle(MapText(14,muted)){wordWrap=true});
+            var button=GameButtonChrome.Style(GameButtonTone.Steel,14);
             float x=rect.x;
             Rect zoomInRect = new Rect(x,10,44,44);
             if(TacticalGUI.IsClicked(zoomInRect) || GUI.Button(zoomInRect,"+",button)) ZoomMap(1/1.4f);
@@ -243,8 +349,13 @@ namespace GeoSniper
             if(TacticalGUI.IsClicked(zoomOutRect) || GUI.Button(zoomOutRect,"-",button)) ZoomMap(1.4f);
             Rect myLocRect = new Rect(x+102,10,110,44);
             if(TacticalGUI.IsClicked(myLocRect) || GUI.Button(myLocRect,"My location",button)) mapBrowseCenter=player.transform.position;
+            if(TryGetExtractionDestination(out _))
+            {
+                var exitRect=new Rect(x+218,10,112,44);
+                if(TacticalGUI.DrawButton(exitRect,"EXTRACTION",true,12))RestoreExtractionGuidance();
+            }
             Rect clearPinRect = new Rect(x+220,10,100,44);
-            if(hasWaypointPin && (TacticalGUI.IsClicked(clearPinRect) || GUI.Button(clearPinRect,"Clear pin",button))) hasWaypointPin=false;
+            if(hasWaypointPin && !TryGetExtractionDestination(out _) && (TacticalGUI.IsClicked(clearPinRect) || GUI.Button(clearPinRect,"Clear pin",button))) hasWaypointPin=false;
             float btnW = 200f, btnH = 46f;
             float topResumeX = Mathf.Max(x + 330, width - btnW - 20f);
             Rect closeMapRect = new Rect(topResumeX, 8, btnW, btnH);

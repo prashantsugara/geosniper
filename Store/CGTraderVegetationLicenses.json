@@ -1,0 +1,55 @@
+{
+  "assets": [
+    {
+      "title": "Realistic Trees-Pack of 2",
+      "creator": "styropyro",
+      "source": "https://www.cgtrader.com/free-3d-models/plant/other/realistic-trees-pack-of-2",
+      "license": "Royalty Free License (no AI)",
+      "license_url": "https://help.cgtrader.com/hc/en-us/articles/360015124437-Royalty-Free-License",
+      "downloaded": "2026-10-06",
+      "downloads": [
+        {
+          "file": "glb.zip",
+          "sha256": "5102cba5cfad55ea5e272a40b9444c6c2cc2aa6eb461ba2335cf80adbcb9287f"
+        }
+      ]
+    },
+    {
+      "title": "Low Poly Plant Bush Asset Pack Greenery plants 3D game-ready",
+      "creator": "Coynese",
+      "source": "https://www.cgtrader.com/free-3d-models/plant/bush/low-poly-plant-bush-asset-pack-greenery-plants-3d-game-ready",
+      "license": "Royalty Free License (no AI)",
+      "license_url": "https://help.cgtrader.com/hc/en-us/articles/360015124437-Royalty-Free-License",
+      "downloaded": "2026-10-06",
+      "downloads": [
+        {
+          "file": "Plants.zip",
+          "sha256": "369ab684d2c0783193f2f82d1e8931d0ebf15e4c3c9dde1e8063bd9df69a7292"
+        }
+      ]
+    },
+    {
+      "title": "Free Basic Grass and Shrubs",
+      "creator": "connorwilding",
+      "source": "https://www.cgtrader.com/free-3d-models/plant/grass/basic-grass",
+      "license": "Royalty Free License (no AI)",
+      "license_url": "https://help.cgtrader.com/hc/en-us/articles/360015124437-Royalty-Free-License",
+      "downloaded": "2026-10-06",
+      "downloads": [
+        {
+          "file": "BasicGrass_01.fbx",
+          "sha256": "9066b08dcdfe2037c040ec769e7d9a0f5dafd112e11040ce728fa1ddf478ab3f"
+        },
+        {
+          "file": "BasicGrass_02.fbx",
+          "sha256": "fe984f465186b59bf3da854f4c0c61be5b6317c63efba7482192fafd40019773"
+        },
+        {
+          "file": "BasicGrass_Textures.zip",
+          "sha256": "ad0a63b4bd2cd1c4a69cce586e99f9e9b576fb0721817d9a6ea4243bbbc9ba68"
+        }
+      ]
+    }
+  ],
+  "changes": "Grounded and normalized meshes; trees reduced to approximately 16,000 triangles with whole leaf islands preserved, leaf cards enlarged for canopy coverage, and simplified branches, bushes to 2,000; atlases resized to 1024px, grass opacity assembled from supplied mask. Spatial batches, quality-scaled tree counts and distance culling for gameplay. Source files retained only as local authoring inputs."
+}

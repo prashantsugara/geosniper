@@ -8,6 +8,8 @@ namespace GeoSniper
     {
         static readonly List<SectorStreetLighting> sectors=new List<SectorStreetLighting>();
         static readonly List<Light> candidates=new List<Light>();
+        static readonly Vector4[] studyPositions=new Vector4[4];
+        static readonly Vector4[] studyColors=new Vector4[4];
         static bool night;
         static float nightBlend,transitionSeconds;
         public static float NightBlend=>nightBlend;
@@ -15,6 +17,11 @@ namespace GeoSniper
         readonly List<Light> lamps=new List<Light>();
         Material metal,bulb,windows;
         float nextRefresh;
+        public void RegisterArchitecturalLamp(Light lamp)
+        {
+            if(lamp==null || lamps.Contains(lamp))return;
+            lamps.Add(lamp);lamp.shadows=LightShadows.None;lamp.enabled=false;ApplyEmission();nextRefresh=0;
+        }
         public static void SetNight(bool enabled,float fadeSeconds=0)
         {
             night=enabled;transitionSeconds=Mathf.Max(0,fadeSeconds);
@@ -65,8 +72,22 @@ namespace GeoSniper
                 var obj=new GameObject("Streetlight ground illumination");obj.transform.SetParent(transform,false);
                 obj.transform.localPosition=p+Vector3.up*5.5f;obj.transform.localRotation=Quaternion.Euler(90,0,0);
                 var light=obj.AddComponent<Light>();light.type=LightType.Spot;light.spotAngle=110;light.range=13;
-                light.color=new Color(1f,.68f,.34f);light.intensity=3;light.shadows=LightShadows.None;light.enabled=false;
+                // Mostly warm sodium lamps, with occasional cooler LED fixtures.
+                light.color=lamps.Count%5==4?new Color(.60f,.79f,1f):new Color(1f,.68f,.34f);
+                light.intensity=lamps.Count%5==0?2.4f:3f;light.shadows=LightShadows.None;light.enabled=false;
                 lamps.Add(light);
+            }
+            // The street study shares the existing nearest-light budget. These fixtures
+            // replace distant pole lights rather than adding unbounded per-shop lights.
+            foreach(var feature in world.Features)
+            {
+                if(MapFeatureStyle.Text(feature,"street_study")!="true" || !world.Buildings.TryGetValue(feature,out var host))continue;
+                var interior=host.GetComponentInChildren<EnterableBuilding>();if(interior==null)continue;
+                var position=interior.transform.TransformPoint(interior.Entrance+interior.EntranceOutward*.65f+Vector3.up*2.85f);
+                var obj=new GameObject("Street study canopy wash");obj.transform.SetParent(transform,false);obj.transform.position=position;
+                obj.transform.rotation=Quaternion.Euler(90,0,0);
+                var light=obj.AddComponent<Light>();light.type=LightType.Spot;light.spotAngle=115;light.range=9;
+                light.color=new Color(1f,.66f,.32f);light.shadows=LightShadows.None;light.enabled=false;lamps.Add(light);
             }
             ApplyEmission();
         }
@@ -114,13 +135,20 @@ namespace GeoSniper
         public static void RefreshActiveLights(Camera camera)
         {
             candidates.Clear();
+            for(int i=0;i<4;i++){studyPositions[i]=Vector4.zero;studyColors[i]=Vector4.zero;}
+            Shader.SetGlobalVectorArray("_StudyLampColors",studyColors);
             foreach(var sector in sectors) foreach(var lamp in sector.lamps) if(lamp!=null) {lamp.enabled=false;candidates.Add(lamp);}
             if(nightBlend<=.001f || camera==null) return;
             var p=camera.transform.position;
             candidates.Sort((a,b)=>(a.transform.position-p).sqrMagnitude.CompareTo((b.transform.position-p).sqrMagnitude));
             int budget=Application.isMobilePlatform?4:8;
             for(int i=0;i<Mathf.Min(budget,candidates.Count);i++)
-                candidates[i].enabled=(candidates[i].transform.position-p).sqrMagnitude<80*80;
+            {
+                var lamp=candidates[i];lamp.enabled=(lamp.transform.position-p).sqrMagnitude<80*80;
+                if(i<4 && lamp.enabled){studyPositions[i]=lamp.transform.position;studyColors[i]=(Vector4)(lamp.color*nightBlend);}
+            }
+            Shader.SetGlobalVectorArray("_StudyLampPositions",studyPositions);
+            Shader.SetGlobalVectorArray("_StudyLampColors",studyColors);
         }
         void OnEnable()
         {

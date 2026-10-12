@@ -8,7 +8,8 @@ namespace GeoSniper
         Animation clips;
         EnemyBot bot;
         CombatActor health;
-        string idle, walk, run, crouch, fire, hit, death, current;
+        string idle, walk, run, crouch, fire, hit, death, current, currentAction;
+        Transform actionSpine;
         float previousHealth, actionUntil, hitReactUntil;
         bool dying;
         Transform visualRoot;
@@ -92,6 +93,22 @@ namespace GeoSniper
                 state.wrapMode = (name.Contains("idle") || name.Contains("walk") || name.Contains("run") || name.Contains("crouch")) ? WrapMode.Loop : WrapMode.ClampForever;
             }
 
+            string model=ImportedVisual.CharacterAnimationRoot(visual).name.Replace("(Clone)","");
+            var mixWalk=LoadClip("Models/Animations/Mixamo/"+model+"_walk");
+            var mixHit=LoadClip("Models/Animations/Mixamo/"+model+"_hit");
+            if(mixWalk!=null){mixWalk.legacy=true;clips.AddClip(mixWalk,"mixamo_walk");walk="mixamo_walk";clips[walk].wrapMode=WrapMode.Loop;}
+            if(mixHit!=null){mixHit.legacy=true;clips.AddClip(mixHit,"mixamo_hit");hit="mixamo_hit";}
+            actionSpine = WeaponGripPose.Bone(visual, "spine");
+            if (actionSpine != null)
+            {
+                foreach (var action in new[] { fire, hit })
+                {
+                    if (action == null || clips[action] == null) continue;
+                    clips[action].layer = 1;
+                    clips[action].wrapMode = WrapMode.Once;
+                    clips[action].AddMixingTransform(actionSpine, true);
+                }
+            }
             Ready = idle != null && walk != null;
             if (Ready)
             {
@@ -137,14 +154,26 @@ namespace GeoSniper
             clips.CrossFade(name, name==hit || name==fire ? .06f : .18f);
         }
 
+        void PlayAction(string name, float duration)
+        {
+            if (string.IsNullOrEmpty(name) || clips[name] == null) return;
+            if (actionSpine == null)
+            {
+                // An unfamiliar skeleton keeps its locomotion instead of playing a full-body freeze.
+                return;
+            }
+            if (currentAction != null && currentAction != name) clips.Stop(currentAction);
+            var state = clips[name];
+            state.time = 0; state.speed = 1;
+            clips.CrossFade(name, .045f, PlayMode.StopSameLayer);
+            currentAction = name; actionUntil = Time.time + duration;
+        }
+
         public void Fire()
         {
-            if (!Ready || dying || Time.time<hitReactUntil || fire == null || clips[fire] == null
-                || (bot != null && (bot.CurrentSpeed > 0.15f || bot.Suspended || bot.isDisarmed || bot.IsReloading))) return;
-            current = null;
-            clips[fire].time = 0;
-            Play(fire);
-            actionUntil = Time.time + 0.22f;
+            if (!Ready || dying || Time.time < hitReactUntil || fire == null || clips[fire] == null
+                || (bot != null && (bot.Suspended || bot.isDisarmed || bot.IsReloading))) return;
+            PlayAction(fire, .2f);
         }
 
         void LateUpdate()
@@ -182,6 +211,8 @@ namespace GeoSniper
                 if (!dying)
                 {
                     dying = true;
+                    if (currentAction != null) clips.Stop(currentAction);
+                    currentAction = null;
                     current = null;
                     if (death != null && clips[death] != null)
                     {
@@ -194,15 +225,14 @@ namespace GeoSniper
 
             if (health.Health < previousHealth && hit != null && clips[hit] != null)
             {
-                current = null;
-                clips[hit].time = 0;
-                Play(hit);
-                hitReactUntil = Time.time + Mathf.Clamp(clips[hit].length*.65f,.18f,.45f);
-                actionUntil = hitReactUntil;
+                float duration = Mathf.Clamp(clips[hit].length*.4f,.16f,.32f);
+                hitReactUntil = Time.time + duration;
+                PlayAction(hit, duration);
             }
             previousHealth = health.Health;
 
-            if (Time.time < actionUntil) return;
+            if (currentAction != null && Time.time >= actionUntil)
+            { clips.Stop(currentAction); currentAction = null; }
 
             bool isCrouched = bot != null && bot.IsCrouched;
             bool isSprinting = bot != null && bot.IsSprinting;

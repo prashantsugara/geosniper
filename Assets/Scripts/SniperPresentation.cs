@@ -15,6 +15,15 @@ namespace GeoSniper
         AudioClip shot, bolt, hit, empty;
         Texture2D scope;
         float kick;
+        float kickVelocity,boltCycleTime;
+        float boltCycleDuration;
+        int boltSoundPhase,reloadSoundPhase;
+        bool reloadAudioActive;
+        readonly AudioClip[] handlingClicks=new AudioClip[3];
+        AudioClip casingClink;
+        Material casingMaterial;
+        float movementBlend;
+        FirstPersonGripPose handlingPose;
         public bool Muted { get; private set; }
         // Muzzle flash
         Light muzzleLight;
@@ -39,6 +48,7 @@ namespace GeoSniper
         int currentZoomIndex = 0;
         
         float hitMarkerTimer;
+        bool hitMarkerKill;int lastKillFrame=-1;
         
         float killTimer;
         float targetDistance;
@@ -47,7 +57,10 @@ namespace GeoSniper
         float lastMissImpactTimer;
         float lastMissDistance;
         CombatActor currentTargetActor;
+        GeoSniper.Duel.DuelOpponentAvatar currentTargetRival;
         string currentTargetClassification = "";
+        ThermalVisionOverlay thermalOverlay;
+        GUIStyle scopeTagStyle, scopeValueStyle, scopeCompassStyle, scopeRangeStyle, scopeFlirStyle, scopeKillStyle;
         float reloadDuration=1.4f;
         float scopeBlend;
         float breathPhase;
@@ -68,8 +81,23 @@ namespace GeoSniper
         Quaternion lastCamRot = Quaternion.identity;
         bool hasLastCamRot;
         
-        public void ConfirmHit() { hitMarkerTimer = 0.2f; lastMissImpactTimer = 0f; HitSound(); }
-        public void ConfirmKill() { killTimer = 2.0f; lastMissImpactTimer = 0f; HitSound(); }
+        public void ConfirmHit() {hitMarkerKill=lastKillFrame==Time.frameCount;hitMarkerTimer=hitMarkerKill?.3f:.2f;lastMissImpactTimer=0f;}
+        public void ConfirmKill() {lastKillFrame=Time.frameCount;hitMarkerKill=true;killTimer=2f;hitMarkerTimer=.3f;lastMissImpactTimer=0f;}
+        public void DrawHitFeedback(float width,float height)
+        {
+            if(hitMarkerTimer<=0)return;
+            var previousColor=GUI.color;var previousMatrix=GUI.matrix;
+            float lifetime=hitMarkerKill?.3f:.2f;
+            GUI.color=hitMarkerKill?new Color(1,.75f,.25f,Mathf.Clamp01(hitMarkerTimer/lifetime)):new Color(1,1,1,Mathf.Clamp01(hitMarkerTimer/lifetime));
+            GUIUtility.RotateAroundPivot(45,new Vector2(width*.5f,height*.5f));
+            float pulse=1-Mathf.Clamp01(hitMarkerTimer/lifetime);
+            float gap=Mathf.Lerp(8,5,pulse),size=hitMarkerKill?9:7;
+            GUI.DrawTexture(new Rect(width*.5f-gap-size,height*.5f-1,size,2),Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(width*.5f+gap,height*.5f-1,size,2),Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(width*.5f-1,height*.5f-gap-size,2,size),Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(width*.5f-1,height*.5f+gap,2,size),Texture2D.whiteTexture);
+            GUI.matrix=previousMatrix;GUI.color=previousColor;
+        }
         public void RecordMissImpact(Vector3 impactWorldPos)
         {
             lastMissImpactPos = impactWorldPos;
@@ -101,7 +129,7 @@ namespace GeoSniper
 
             GameObject xrayOverlay = BuildXRaySkullSpineOverlay(target, impactPos);
 
-            if (speaker != null) speaker.PlayOneShot(ProceduralAudio.CreateHeadshotPing(), 0.9f);
+            // Hit audio is owned by the confirmed damage path.
             TimeScaleController.SetHitCam(0.08f);
             // TimeScaleController sets fixedDeltaTime automatically
             StartCoroutine(RestoreXRayTimeScale(2.2f, renderers, originalMats, xrayOverlay));
@@ -179,14 +207,21 @@ namespace GeoSniper
         {
             // Different rifles communicate their weight without requiring a second
             // animation rig: the heavy Barrett kicks hardest, the MK12 settles fastest.
-            shotKick = CurrentWeaponIndex==0 ? 1.35f : CurrentWeaponIndex==1 ? 1f : .72f;
-            kick = Mathf.Max(kick,shotKick);
+            shotKick = Mathf.Clamp(WeaponCatalog.Get(CurrentWeaponIndex).Recoil/95f,.2f,1.5f);
+            shotKick *= Config!=null ? Config.recoilPitch/9f : 1;
+            kickVelocity=Mathf.Min(kickVelocity+shotKick*52f,100f);
+            if(WeaponHandlingMotion.BoltAction(CurrentWeaponIndex))
+            {
+                boltCycleDuration=WeaponHandlingMotion.BoltDuration(CurrentWeaponIndex);
+                boltCycleTime=boltCycleDuration;boltSoundPhase=0;
+            }
             shakeIntensity = Mathf.Max(shakeIntensity,shotKick*.12f);
         }
         public void Initialize(Camera camera)
         {
             if(rifle!=null) return;
             cam=camera;
+            thermalOverlay=ThermalVisionOverlay.Ensure(cam);
             cam.nearClipPlane = 0.05f;
             currentFOV = Config != null ? Config.hipFOV : 65f;
             cam.fieldOfView = currentFOV;
@@ -194,20 +229,26 @@ namespace GeoSniper
             speaker=gameObject.AddComponent<AudioSource>(); speaker.spatialBlend=0; speaker.volume=.55f;
             shot=Sound("Rifle report",.65f,0); bolt=Sound("Bolt and magazine",1.4f,1);
             hit=Sound("Target confirmation",.18f,2); empty=Sound("Empty chamber",.09f,3);
+            casingClink=ProceduralAudio.CreateShellClink();
+            if(ProceduralAudio.LoadAsset("ShellClink")!=casingClink)owned.Add(casingClink);
+            for(int i=0;i<handlingClicks.Length;i++)handlingClicks[i]=BuildHandlingClick(i);
+            casingMaterial=new Material(Shader.Find("Standard") ?? Shader.Find("Diffuse"));
+            casingMaterial.color=new Color(.95f,.78f,.28f);
+            casingMaterial.SetFloat("_Metallic",.9f);casingMaterial.SetFloat("_Glossiness",.75f);owned.Add(casingMaterial);
             BuildMuzzleFlash(camera);
             BuildTracerLine();
             BuildCombatKnife(camera);
             
             EquipWeaponModel(CurrentWeaponIndex);
             
-            scope=new Texture2D(512,512,TextureFormat.RGBA32,false); owned.Add(scope);
-            var pixels=new Color32[512*512];
-            for(int y=0;y<512;y++) for(int x=0;x<512;x++)
+            int lensSize=MobileGraphics.Selected==MobileGraphicsPreset.Performance?512:1024;
+            scope=new Texture2D(lensSize,lensSize,TextureFormat.RGBA32,false){filterMode=FilterMode.Bilinear,wrapMode=TextureWrapMode.Clamp}; owned.Add(scope);
+            var pixels=new Color32[lensSize*lensSize];
+            for(int y=0;y<lensSize;y++) for(int x=0;x<lensSize;x++)
             {
-                float r=Vector2.Distance(new Vector2(x,y),new Vector2(255.5f,255.5f))/256;
-                pixels[y*512+x]=r>.98f?new Color32(5,8,10,255):r>.92f?new Color32(38,44,45,255):r>.90f?new Color32(110,117,108,255):new Color32(0,0,0,0);
+                pixels[y*lensSize+x]=ScopeOptics.LensPixel((x+.5f)*2/lensSize-1,(y+.5f)*2/lensSize-1);
             }
-            scope.SetPixels32(pixels); scope.Apply();
+            scope.SetPixels32(pixels); scope.Apply(false,true);
         }
         Material Mat(Color color,float metallic)
         {
@@ -237,7 +278,7 @@ namespace GeoSniper
                 var slots=renderer.sharedMaterials;
                 for(int i=0;i<slots.Length;i++)
                 {
-                    if(slots[i]!=null && slots[i].mainTexture!=null) continue;
+                    if(slots[i]!=null && (slots[i].mainTexture!=null || slots[i].name.StartsWith("WeaponFinish/"))) continue;
                     string name=(renderer.name+" "+(slots[i]!=null?slots[i].name:"")).ToLowerInvariant();
                     if(name.Contains("glass") || name.Contains("lens") || name.Contains("optic")) slots[i]=glass;
                     else if(CurrentWeaponIndex==1 && (name.Contains("bolt silver") || name.Contains("bolt_silver") || name.Contains("screw"))) slots[i]=steel;
@@ -276,6 +317,24 @@ namespace GeoSniper
         }
 
         AudioClip suppressedShot;
+
+        AudioClip BuildHandlingClick(int kind)
+        {
+            const int rate=22050;
+            var data=new float[Mathf.RoundToInt(rate*(kind==1?.14f:.09f))];
+            var random=new System.Random(821+kind);float filtered=0;
+            for(int i=0;i<data.Length;i++)
+            {
+                float t=i/(float)rate;filtered=Mathf.Lerp(filtered,(float)random.NextDouble()*2-1,.35f);
+                data[i]=(filtered*.5f+Mathf.Sin(t*2*Mathf.PI*(kind==2?1850:720))*.22f)*Mathf.Exp(-t*(kind==1?26:55));
+            }
+            var clip=AudioClip.Create("Weapon mechanical "+kind,data.Length,1,rate,false);
+            clip.SetData(data,0);owned.Add(clip);return clip;
+        }
+        void HandlingClick(int kind,float volume=.55f)
+        {
+            if(speaker!=null && handlingClicks[kind]!=null)speaker.PlayOneShot(handlingClicks[kind],volume);
+        }
 
         AudioClip Sound(string name,float seconds,int kind)
         {
@@ -553,16 +612,18 @@ namespace GeoSniper
             OnShotFired();
             AudioClip activeReport = CurrentWeaponIndex == 2 ? (suppressedShot ?? shot) : shot;
             speaker.PlayOneShot(activeReport, CurrentWeaponIndex == 2 ? 0.7f : 1.0f); 
+            CampaignAcoustics.RifleEcho(speaker,CurrentWeaponIndex==2);
             ShowMuzzleFlash();
-            EjectCasing();
+            if(!WeaponHandlingMotion.BoltAction(CurrentWeaponIndex))EjectCasing();
         }
         public void ShotWithTracer(Vector3 from,Vector3 to,bool hitEnemy)
         {
             OnShotFired();
             AudioClip activeReport = CurrentWeaponIndex == 2 ? (suppressedShot ?? shot) : shot;
             speaker.PlayOneShot(activeReport, CurrentWeaponIndex == 2 ? 0.7f : 1.0f); 
+            CampaignAcoustics.RifleEcho(speaker,CurrentWeaponIndex==2);
             ShowMuzzleFlash();
-            EjectCasing();
+            if(!WeaponHandlingMotion.BoltAction(CurrentWeaponIndex))EjectCasing();
             ResolveProjectileVisual(from,to,hitEnemy);
         }
 
@@ -580,11 +641,7 @@ namespace GeoSniper
             var rend = casing.GetComponent<Renderer>();
             if (rend != null)
             {
-                var brassMat = new Material(Shader.Find("Standard") ?? Shader.Find("Diffuse"));
-                brassMat.color = new Color(0.95f, 0.78f, 0.28f);
-                brassMat.SetFloat("_Metallic", 0.90f);
-                brassMat.SetFloat("_Glossiness", 0.75f);
-                rend.sharedMaterial = brassMat;
+                rend.sharedMaterial = casingMaterial;
             }
 
             var rb = casing.AddComponent<Rigidbody>();
@@ -602,7 +659,7 @@ namespace GeoSniper
         System.Collections.IEnumerator PlayCasingClinkDelayed(float delay)
         {
             yield return new WaitForSeconds(delay);
-            if (speaker != null) speaker.PlayOneShot(ProceduralAudio.CreateShellClink(), 0.65f);
+            if (speaker != null && casingClink!=null) speaker.PlayOneShot(casingClink, 0.35f);
         }
         public void ResolveProjectileVisual(Vector3 from,Vector3 to,bool hitEnemy)
         {
@@ -613,10 +670,14 @@ namespace GeoSniper
             if (tracerLine != null) tracerLine.enabled = false;
             tracerTimer = 0;
         }
-        public void ReloadSound(float duration=1.4f) { reloadDuration=Mathf.Clamp(duration,.5f,3f); if(speaker!=null && bolt!=null) speaker.PlayOneShot(bolt); }
+        public void ReloadSound(float duration=1.4f)
+        {
+            reloadDuration=Mathf.Max(.1f,duration);reloadSoundPhase=0;reloadAudioActive=true;
+            boltCycleTime=boltCycleDuration=0;boltSoundPhase=2;
+        }
         public void HitSound() { speaker.PlayOneShot(hit); }
         public void EmptySound() { speaker.PlayOneShot(empty); }
-        public void ToggleMute() { Muted=!Muted; speaker.mute=Muted; }
+        public void ToggleMute() { Muted=!Muted; speaker.mute=Muted;CampaignAcoustics.SetMuted(Muted); }
         void ShowMuzzleFlash()
         {
             if(muzzleFlash==null || BallisticsSystem.isBulletCamActive) return;
@@ -701,10 +762,15 @@ namespace GeoSniper
             bool metal=name.Contains("metal") || name.Contains("steel") || name.Contains("rail")
                 || name.Contains("vehicle") || name.Contains("car") || name.Contains("tank");
             EmitSurfaceImpact(position,metal,name.Contains("water"));
+            GeoSniper.Duel.SniperDuelManager.ActiveInstance?.NotifySurfaceImpact(position, metal ? (byte)1 : name.Contains("water") ? (byte)2 : (byte)0);
         }
+
+        public static void PlayRemoteSurfaceImpact(Vector3 position, byte kind) => EmitSurfaceImpact(position, kind == 1, kind == 2);
 
         static void EmitSurfaceImpact(Vector3 position,bool metal,bool water)
         {
+            byte kind=metal ? (byte)1 : water ? (byte)2 : (byte)0;
+            if(!CampaignAcoustics.Impact(position,kind))GeoSniper.Duel.DuelAudioFeedback.PlaySurfaceImpact(position,kind);
             ParticleSystem ps=null;
             for(int i=impactPool.Count-1;i>=0;i--)
             {
@@ -901,7 +967,7 @@ namespace GeoSniper
                 if (knifeSlashTimer <= 0f)
                 {
                     if (combatKnife != null) combatKnife.gameObject.SetActive(false);
-                    if (rifle != null) rifle.gameObject.SetActive(scopeBlend < 0.60f && !BallisticsSystem.isBulletCamActive);
+                    if (rifle != null) rifle.gameObject.SetActive((!UsesOptic || scopeBlend < 0.60f) && !BallisticsSystem.isBulletCamActive);
                 }
             }
 
@@ -923,6 +989,7 @@ namespace GeoSniper
         {
             if (Config == null || Config.zoomLevels == null || Config.zoomLevels.Length == 0) return;
             currentZoomIndex = (currentZoomIndex + 1) % Config.zoomLevels.Length;
+            MobileCombatInput.ZoomSliderValue=currentZoomIndex/(float)Mathf.Max(1,Config.zoomLevels.Length-1);
         }
 
         public void SetSway(WeaponSway newSway) { sway = newSway; }
@@ -938,21 +1005,46 @@ namespace GeoSniper
             }
         }
 
+        public void ResetAimPresentation()
+        {
+            scopeBlend=0;
+            if(MobilePostProcess.Instance!=null)MobilePostProcess.Instance.scopeBlend=0;
+            if(thermalOverlay!=null)thermalOverlay.SetScopeState(false,0,null);
+        }
+
         public void Animate(bool zoom, float reload, bool isMoving, bool isSprinting = false, bool isCrouching = false, float speed = 0f)
         {
             if(rifle==null) return;
             if (BallisticsSystem.isBulletCamActive)
             {
                 rifle.gameObject.SetActive(false);
+                if(thermalOverlay!=null)thermalOverlay.SetScopeState(false, 0, null);
                 return;
             }
-            scopeBlend=Mathf.MoveTowards(scopeBlend,zoom?1f:0f,Time.deltaTime*8f);
-            if (MobilePostProcess.Instance != null) MobilePostProcess.Instance.scopeBlend = scopeBlend;
-            bool showRifle = scopeBlend < .60f && knifeSlashTimer <= 0f && (UrbanPlayer.Instance == null || !UrbanPlayer.Instance.BinocularsMode);
+            if(reload>0)zoom=false;
+            scopeBlend=Mathf.Lerp(scopeBlend,zoom?1f:0f,1-Mathf.Exp(-Time.deltaTime*16f));
+            if (thermalOverlay == null && cam != null) thermalOverlay=ThermalVisionOverlay.Ensure(cam);
+            if (MobilePostProcess.Instance != null) MobilePostProcess.Instance.scopeBlend = UsesOptic ? scopeBlend : 0f;
+            bool showRifle = (!UsesOptic || scopeBlend < .60f) && knifeSlashTimer <= 0f && (UrbanPlayer.Instance == null || !UrbanPlayer.Instance.BinocularsMode);
             rifle.gameObject.SetActive(showRifle);
-            kick=Mathf.MoveTowards(kick,0,Time.deltaTime*(reload>0?9f:7f));
+            WeaponHandlingMotion.Recover(ref kick,ref kickVelocity,Time.deltaTime);
+            boltCycleTime=Mathf.Max(0,boltCycleTime-Time.deltaTime);
             shotKick=Mathf.MoveTowards(shotKick,0,Time.deltaTime*5f);
-            float tilt=reload>0?Mathf.Sin((reloadDuration-reload)/Mathf.Max(.1f,reloadDuration)*Mathf.PI):0;
+            float reloadProgress=reload>0?Mathf.Clamp01(1-reload/Mathf.Max(.1f,reloadDuration)):1;
+            float tilt=WeaponHandlingMotion.ReloadEnvelope(reloadProgress);
+            float boltProgress=boltCycleDuration>0?1-boltCycleTime/boltCycleDuration:1;
+            float boltPose=WeaponHandlingMotion.BoltHand(boltProgress);
+            if(boltSoundPhase==0 && boltCycleDuration>0 && boltProgress>=.25f)
+            {HandlingClick(0);EjectCasing();boltSoundPhase=1;}
+            if(boltSoundPhase==1 && boltProgress>=.72f){HandlingClick(2);boltSoundPhase=2;}
+            if(reloadAudioActive)
+            {
+                if(reloadSoundPhase==0 && reloadProgress>=.28f){HandlingClick(0);reloadSoundPhase=1;}
+                if(reloadSoundPhase==1 && reloadProgress>=.60f){HandlingClick(1);reloadSoundPhase=2;}
+                if(reloadSoundPhase==2 && reloadProgress>=.84f){HandlingClick(2);reloadSoundPhase=3;}
+                if(reloadProgress>=1)reloadAudioActive=false;
+            }
+            if(handlingPose!=null)handlingPose.SetHandling(reloadProgress,boltPose,WeaponHandlingMotion.BoltPull(boltProgress));
             
             Vector2 swayOffset = Vector2.zero;
             if (sway != null) swayOffset = sway.GetSwayOffset(isMoving, zoom);
@@ -963,12 +1055,16 @@ namespace GeoSniper
             crouchBlend = Mathf.MoveTowards(crouchBlend, (isCrouching && !zoom) ? 1f : 0f, Time.deltaTime * 6f);
             
             // Call of Duty Stride Cadence & Dual-Harmonic Figure-8 Weapon Bob
-            float cadence = tacticalSprint ? 9.8f : (isMoving ? (isCrouching ? 4.8f : 6.4f) : 2.1f);
+            movementBlend=Mathf.Lerp(movementBlend,isMoving?1:0,1-Mathf.Exp(-Time.deltaTime*12f));
+            float cadence=Mathf.Lerp(2.1f,Mathf.Lerp(Mathf.Lerp(6.4f,4.8f,crouchBlend),9.8f,tacticalSprintBlend),movementBlend);
             stridePhase += Time.deltaTime * cadence;
             
-            float bobAmpX = tacticalSprint ? 0.034f : (isMoving ? (isCrouching ? 0.009f : 0.016f) : 0.0016f);
-            float bobAmpY = tacticalSprint ? 0.028f : (isMoving ? (isCrouching ? 0.007f : 0.013f) : 0.0014f);
-            float bobAmpRoll = tacticalSprint ? 4.8f : (isMoving ? (isCrouching ? 1.0f : 1.9f) : 0.35f);
+            float bobAmpX=Mathf.Lerp(Mathf.Lerp(.016f,.009f,crouchBlend),.034f,tacticalSprintBlend);
+            float bobAmpY=Mathf.Lerp(Mathf.Lerp(.013f,.007f,crouchBlend),.028f,tacticalSprintBlend);
+            float bobAmpRoll=Mathf.Lerp(Mathf.Lerp(1.9f,1f,crouchBlend),4.8f,tacticalSprintBlend);
+            bobAmpX=Mathf.Lerp(.0016f,bobAmpX,movementBlend);
+            bobAmpY=Mathf.Lerp(.0014f,bobAmpY,movementBlend);
+            bobAmpRoll=Mathf.Lerp(.35f,bobAmpRoll,movementBlend);
             
             if (zoom)
             {
@@ -993,18 +1089,20 @@ namespace GeoSniper
                 Vector3 deltaEuler = (Quaternion.Inverse(lastCamRot) * camRot).eulerAngles;
                 float deltaYaw = Mathf.DeltaAngle(0, deltaEuler.y);
                 float deltaPitch = Mathf.DeltaAngle(0, deltaEuler.x);
+                float rateScale=1f/Mathf.Max(.001f,Time.deltaTime*60f);
+                deltaYaw=Mathf.Clamp(deltaYaw*rateScale,-8,8);deltaPitch=Mathf.Clamp(deltaPitch*rateScale,-8,8);
                 lastCamRot = camRot;
                 
                 float zoomLagMult = zoom ? 0.22f : 1.0f;
                 Vector3 targetLagPos = new Vector3(-deltaYaw * 0.0026f, deltaPitch * 0.0022f, 0f) * zoomLagMult;
                 targetLagPos = Vector3.ClampMagnitude(targetLagPos, 0.032f);
-                inertiaPos = Vector3.Lerp(inertiaPos, targetLagPos, Time.deltaTime * 18f);
+                inertiaPos = Vector3.Lerp(inertiaPos, targetLagPos, 1-Mathf.Exp(-Time.deltaTime*18f));
                 
                 Vector3 targetLagRot = new Vector3(deltaPitch * 0.85f, -deltaYaw * 0.75f, deltaYaw * 0.65f) * zoomLagMult;
-                inertiaRot = Vector3.Lerp(inertiaRot, targetLagRot, Time.deltaTime * 18f);
+                inertiaRot = Vector3.Lerp(inertiaRot, targetLagRot, 1-Mathf.Exp(-Time.deltaTime*18f));
             }
-            inertiaPos = Vector3.Lerp(inertiaPos, Vector3.zero, Time.deltaTime * 8.5f);
-            inertiaRot = Vector3.Lerp(inertiaRot, Vector3.zero, Time.deltaTime * 8.5f);
+            inertiaPos *= Mathf.Exp(-Time.deltaTime*8.5f);
+            inertiaRot *= Mathf.Exp(-Time.deltaTime*8.5f);
             
             // Signature Call of Duty Tactical Sprint High-Ready Carry Pose
             Vector3 sprintPosOffset = new Vector3(-0.038f, -0.055f, -0.045f) * tacticalSprintBlend;
@@ -1015,43 +1113,46 @@ namespace GeoSniper
             Quaternion crouchRotOffset = Quaternion.Euler(2.2f * crouchBlend, -2.5f * crouchBlend, 1.2f * crouchBlend);
             
             Vector3 targetPos = weaponViewPosition + sprintPosOffset + crouchPosOffset + new Vector3(
-                bobX + swayOffset.x * 0.02f + inertiaPos.x,
-                -tilt * 0.12f + bobY + swayOffset.y * 0.02f + inertiaPos.y,
-                -kick * 0.08f + inertiaPos.z
+                bobX + swayOffset.x * 0.02f + inertiaPos.x-tilt*.055f,
+                -tilt * 0.045f + bobY + swayOffset.y * 0.02f + inertiaPos.y,
+                -kick * 0.08f - tilt*.035f + inertiaPos.z
             );
             rifle.localPosition = targetPos;
+            if(!UsesOptic)
+                rifle.localPosition=Vector3.Lerp(targetPos,ironSightPosition+new Vector3(0,-tilt*.12f,-kick*.08f),scopeBlend);
             
             Quaternion targetRot = weaponViewRotation * sprintRotOffset * crouchRotOffset * Quaternion.Euler(
-                -kick * (CurrentWeaponIndex == 0 ? 11f : 8f) + tilt * 22f - swayOffset.y * 1.5f + inertiaRot.x,
+                -kick * (CurrentWeaponIndex == 0 ? 11f : 8f) - tilt * 8f - swayOffset.y * 1.5f + inertiaRot.x,
                 swayOffset.x * 1.5f + bobRoll * 0.45f + inertiaRot.y,
-                tilt * -18f + bobRoll + inertiaRot.z
+                tilt * -24f + bobRoll + inertiaRot.z+boltPose*3f
             );
             rifle.localRotation = targetRot;
+            if(!UsesOptic) rifle.localRotation=Quaternion.Slerp(targetRot,Quaternion.Euler(-kick*8f,0,0),scopeBlend);
             
             float targetFOV = 65f;
             if (UrbanPlayer.Instance != null && UrbanPlayer.Instance.BinocularsMode)
             {
                 targetFOV = 65f / UrbanPlayer.Instance.BinocularZoom;
-                currentFOV = Mathf.Lerp(currentFOV, targetFOV, Time.deltaTime * 14f);
+                currentFOV = ScopeOptics.SmoothFov(currentFOV, targetFOV,14,Time.deltaTime);
             }
             else if (Config != null) 
             {
-                if (zoom && Config.zoomLevels.Length > 0)
+                if (zoom && !UsesOptic)
+                    targetFOV=Config.zoomLevels!=null && Config.zoomLevels.Length>0?Config.zoomLevels[0]:WeaponCatalog.Get(CurrentWeaponIndex).Fov;
+                else if (zoom)
                 {
-                    float minZoom = Config.zoomLevels[0];
-                    float maxZoom = Config.zoomLevels.Length > 1 ? Config.zoomLevels[Config.zoomLevels.Length - 1] : minZoom * 0.5f;
-                    targetFOV = Mathf.Lerp(minZoom, maxZoom, MobileCombatInput.ZoomSliderValue);
+                    targetFOV = ScopeOptics.ZoomFov(Config,MobileCombatInput.ZoomSliderValue);
                 }
                 else
                 {
                     targetFOV = Config.hipFOV;
                 }
-                currentFOV = Mathf.Lerp(currentFOV, targetFOV, Time.deltaTime * Config.scopeTransitionSpeed);
+                currentFOV = ScopeOptics.SmoothFov(currentFOV, targetFOV,Config.scopeTransitionSpeed,Time.deltaTime);
             }
             else 
             {
                 targetFOV = zoom ? 12f : 65f;
-                currentFOV = Mathf.Lerp(currentFOV, targetFOV, Time.deltaTime * 10f);
+                currentFOV = ScopeOptics.SmoothFov(currentFOV, targetFOV,10,Time.deltaTime);
             }
             
             if (cam != null)
@@ -1071,9 +1172,16 @@ namespace GeoSniper
                     {
                         targetDistance = hitInfo.distance;
                         targetElevation = hitInfo.point.y - cam.transform.position.y;
+                        currentTargetRival = hitInfo.collider.GetComponentInParent<GeoSniper.Duel.DuelOpponentAvatar>();
                         var actor = hitInfo.collider.GetComponentInParent<CombatActor>();
-                        if (actor != null && !actor.IsDead)
+                        if (currentTargetRival != null && !currentTargetRival.IsDead)
                         {
+                            currentTargetActor = null;
+                            currentTargetClassification = "REAL PLAYER";
+                        }
+                        else if (actor != null && !actor.IsDead)
+                        {
+                            currentTargetRival = null;
                             currentTargetActor = actor;
                             var enemy = hitInfo.collider.GetComponentInParent<EnemyBot>();
                             var civ = hitInfo.collider.GetComponentInParent<CivilianBot>();
@@ -1084,6 +1192,7 @@ namespace GeoSniper
                         else
                         {
                             currentTargetActor = null;
+                            currentTargetRival = null;
                             currentTargetClassification = "";
                         }
                     }
@@ -1092,6 +1201,7 @@ namespace GeoSniper
                         targetDistance = -1f;
                         targetElevation = 0f;
                         currentTargetActor = null;
+                        currentTargetRival = null;
                         currentTargetClassification = "";
                     }
                 }
@@ -1100,36 +1210,48 @@ namespace GeoSniper
                     targetDistance = -1f;
                     targetElevation = 0f;
                     currentTargetActor = null;
+                    currentTargetRival = null;
                     currentTargetClassification = "";
                 }
             }
             
             UpdateEffects();
+            if(thermalOverlay!=null)
+            {
+                var viewer=UrbanPlayer.Instance;
+                bool canView=viewer==null || (viewer.Scoped && !viewer.InputBlocked && viewer.Health!=null && !viewer.Health.IsDead);
+                thermalOverlay.SetScopeState(UsesOptic && ThermalMode && zoom && canView,scopeBlend,GeoSniper.Duel.SniperDuelManager.ActiveOpponent);
+            }
         }
         public bool ThermalMode;
         public bool RainEffect;
         public float CondensationAlpha = 0f;
-        public int CurrentWeaponIndex = 0; // 0: BARRETT .50 CAL, 1: M24 TACTICAL, 2: MK12 DMR
-        public string WeaponName => CurrentWeaponIndex == 0 ? "BARRETT .50 CAL" : CurrentWeaponIndex == 1 ? "M24 TACTICAL" : "MK12 SPR DMR";
+        public int CurrentWeaponIndex = WeaponCatalog.StarterPrimary;
+        public bool UsesOptic => CurrentWeaponIndex < 5;
+        Vector3 ironSightPosition;
+        public string WeaponName => WeaponCatalog.Get(CurrentWeaponIndex).Name;
+
+        public bool UseDuelStats;
 
         public int MaxAmmo
         {
             get
             {
-                int baseAmmo = CurrentWeaponIndex == 0 ? 5 : CurrentWeaponIndex == 1 ? 20 : 30;
-                int magLvl = PlayerPrefs.GetInt("GeoSniper.WpnMagLvl_" + CurrentWeaponIndex, 0);
-                return baseAmmo + magLvl * (CurrentWeaponIndex == 0 ? 2 : 5);
+                int baseAmmo = WeaponCatalog.Get(CurrentWeaponIndex).Magazine;
+                if (UseDuelStats) return baseAmmo;
+                return WeaponProgression.Magazine(CurrentWeaponIndex,WeaponProgression.Tier(CurrentWeaponIndex,WeaponUpgrade.Magazine));
             }
         }
 
         public void EquipWeaponModel(int index)
         {
-            CurrentWeaponIndex=Mathf.Clamp(index,0,2);
+            kick=kickVelocity=boltCycleTime=boltCycleDuration=0;boltSoundPhase=2;reloadAudioActive=false;handlingPose=null;hasLastCamRot=false;
+            CurrentWeaponIndex=Mathf.Clamp(index,0,WeaponCatalog.Count-1);
             if(cam==null) return;
-            if(rifle!=null) { Destroy(rifle.gameObject); rifle=null; }
+            if(rifle!=null) { DestroyPresentationObject(rifle.gameObject); rifle=null; }
             string[] primaryPaths = { "Models/Weapons/Barrett50", "Models/Weapons/M24Tactical", "Models/Weapons/MK12SPR" };
             string[] fallbackPaths = { "Models/GeoSniperRifleProvided", "Models/Weapons/M24Tactical", "Models/SniperRifle" };
-            var imported = Resources.Load<GameObject>(primaryPaths[CurrentWeaponIndex]) ?? Resources.Load<GameObject>(fallbackPaths[CurrentWeaponIndex]);
+            var imported = Resources.Load<GameObject>("Models/Weapons/"+WeaponCatalog.Get(CurrentWeaponIndex).Model) ?? Resources.Load<GameObject>(fallbackPaths[Mathf.Min(CurrentWeaponIndex,2)]);
             
             rifle = new GameObject("First person " + WeaponName).transform;
             rifle.SetParent(cam.transform, false);
@@ -1140,10 +1262,14 @@ namespace GeoSniper
                 ImportedVisual.SanitizeWeaponModel(model.transform);
                 if(!WeaponGeometry.Configure(model.transform, rifle, CurrentWeaponIndex)) return;
                 var calibrated=ImportedVisual.LocalBounds(rifle);
+                ironSightPosition=new Vector3(-calibrated.center.x,-calibrated.max.y,.37f);
                 muzzleLocal=new Vector3(calibrated.center.x,calibrated.center.y,calibrated.max.z);
                 cam.nearClipPlane = .05f;
                 weaponViewPosition = CurrentWeaponIndex == 0 ? new Vector3(.16f, -.225f, .38f) : new Vector3(.15f, -.225f, .37f);
                 weaponViewRotation = Quaternion.Euler(0, 1, -2);
+                // Start outside the camera even before the first gameplay update.
+                rifle.localPosition = weaponViewPosition;
+                rifle.localRotation = weaponViewRotation;
                 
                 ApplyRifleMaterials(model.transform);
                 AttachFPSArms(rifle, CurrentWeaponIndex);
@@ -1200,7 +1326,7 @@ namespace GeoSniper
 
             // Re-parent to weaponRoot
             armsInstance.transform.SetParent(weaponRoot, false);
-            Destroy(dummyHolder.gameObject);
+            DestroyPresentationObject(dummyHolder.gameObject);
             armsInstance.name = "FirstPersonTacticalArmsRig";
 
             // Immediately disable and strip all M24 rifle meshes so ONLY the authentic rigged arms and hands remain
@@ -1208,17 +1334,17 @@ namespace GeoSniper
             {
                 mr.enabled = false;
                 mr.gameObject.SetActive(false);
-                Destroy(mr.gameObject);
+                DestroyPresentationObject(mr.gameObject);
             }
             foreach (var mf in armsInstance.GetComponentsInChildren<MeshFilter>(true))
             {
-                Destroy(mf);
+                DestroyPresentationObject(mf);
             }
 
             // Remove any colliders
             foreach (var col in armsInstance.GetComponentsInChildren<Collider>(true))
             {
-                Destroy(col);
+                DestroyPresentationObject(col);
             }
 
             // Ensure proper arm materials and shadow settings
@@ -1262,12 +1388,15 @@ namespace GeoSniper
             if (lWrist != null) lWrist.localScale = Vector3.one;
             var pose=weaponOrArmsRoot.GetComponent<FirstPersonGripPose>() ?? weaponOrArmsRoot.gameObject.AddComponent<FirstPersonGripPose>();
             pose.Initialize(rifle,weaponOrArmsRoot);
+            handlingPose=pose;
 
         }
 
         public void DrawScope(float width, float height, int currentAmmo = -1, bool isReloading = false)
         {
-            float d = Mathf.Min(width, height) * 0.92f, x = (width - d) / 2, y = (height - d) / 2;
+            if(!UsesOptic) return;
+            EnsureScopeStyles();
+            float d = ScopeOptics.Diameter(width,height), x = (width - d) / 2, y = (height - d) / 2;
             
             // Scope Mask Outer Blackout
             GUI.color = new Color(.02f, .03f, .04f, Mathf.Clamp01(scopeBlend));
@@ -1279,7 +1408,7 @@ namespace GeoSniper
             // Thermal Mode Lens Overlay
             if (ThermalMode)
             {
-                GUI.color = new Color(0f, 0.15f, 0.32f, 0.65f); // Deep FLIR Thermal Blue
+                GUI.color = new Color(0f, 0.15f, 0.32f, 0.65f * Mathf.Clamp01(scopeBlend)); // Deep FLIR Thermal Blue
                 GUI.DrawTexture(new Rect(x, y, d, d), Texture2D.whiteTexture);
             }
 
@@ -1293,47 +1422,28 @@ namespace GeoSniper
                 GUI.DrawTexture(new Rect(x + 12, y + 12, d - 24, d - 24), scope);
             }
 
-            // FLIR Thermal Hot Human Signatures (enemies highlighted against cold background)
-            if (ThermalMode && cam != null)
-            {
-                var allBots = EnemyBot.AllBots;
-                if (allBots != null)
-                {
-                    for (int bi = 0; bi < allBots.Count; bi++)
-                    {
-                        var bot = allBots[bi];
-                        if (bot == null || bot.Actor == null || bot.Actor.IsDead || !bot.gameObject.activeInHierarchy) continue;
-                        Vector3 scr = cam.WorldToScreenPoint(bot.transform.position + Vector3.up * 1.0f);
-                        if (scr.z > 1f && scr.z < 450f)
-                        {
-                            float bx = scr.x; float by = height - scr.y;
-                            if (Vector2.Distance(new Vector2(bx, by), new Vector2(width / 2, height / 2)) < d * 0.44f)
-                            {
-                                float hSize = Mathf.Clamp(130f / scr.z * 18f, 10f, 48f);
-                                float wSize = hSize * 0.42f;
-                                GUI.color = new Color(1f, 0.6f, 0.1f, 0.35f * Mathf.Clamp01(scopeBlend));
-                                GUI.DrawTexture(new Rect(bx - wSize * 0.7f, by - hSize * 0.6f, wSize * 1.4f, hSize * 1.2f), Texture2D.whiteTexture);
-                                GUI.color = new Color(1f, 0.98f, 0.85f, 0.85f * Mathf.Clamp01(scopeBlend));
-                                GUI.DrawTexture(new Rect(bx - wSize * 0.5f, by - hSize * 0.5f, wSize, hSize), Texture2D.whiteTexture);
-                            }
-                        }
-                    }
-                }
-                GUI.color = Color.white;
-            }
+            // ThermalVisionOverlay draws the actual animated human meshes into
+            // the camera depth buffer, including the real rival. Heat therefore
+            // follows the visible silhouette and cannot reveal a player through cover.
 
             // Authentic Mil-Dot Crosshair (Clean, razor-sharp optic etched reticle)
-            float milStep = 22f * (d / 600f);
+            float milStep = height*.5f*Mathf.Tan(.001f)/Mathf.Tan(Mathf.Clamp(currentFOV,1,120)*Mathf.Deg2Rad*.5f);
             GUI.color = (ThermalMode ? new Color(0f, 1f, 0.8f, 0.9f) : new Color(0, 0, 0, .85f)) * Mathf.Clamp01(scopeBlend);
-            GUI.DrawTexture(new Rect(width / 2 - d * 0.43f, height / 2, d * 0.86f, 1), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(width / 2, height / 2 - d * 0.43f, 1, d * 0.86f), Texture2D.whiteTexture);
+            Color reticleColor=GUI.color;
+            GUI.color=new Color(.9f,.94f,.93f,.32f*Mathf.Clamp01(scopeBlend));
+            GUI.DrawTexture(new Rect(width / 2 - d * .435f,height / 2-.5f,d*.87f,2),Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(width / 2-.5f,height / 2-d*.435f,2,d*.87f),Texture2D.whiteTexture);
+            GUI.color=reticleColor;
+            GUI.DrawTexture(new Rect(width / 2 - d * 0.435f, height / 2, d * 0.87f, 1), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(width / 2, height / 2 - d * 0.435f, 1, d * 0.87f), Texture2D.whiteTexture);
 
-            for (int i = -8; i <= 8; i++)
+            for (int i = -4; i <= 4; i++)
             {
                 if (i == 0) continue;
                 bool isMajor = (i % 2 == 0);
-                float tickLen = isMajor ? 10f : 5f;
-                float offset = i * (milStep * 0.5f);
+                float tickLen = isMajor ? 6f : 3f;
+                float offset = i * milStep*2;
+                if(Mathf.Abs(offset)>d*.38f)continue;
 
                 GUI.DrawTexture(new Rect(width / 2 - tickLen * 0.5f, height / 2 + offset, tickLen, 1), Texture2D.whiteTexture);
                 GUI.DrawTexture(new Rect(width / 2 + offset, height / 2 - tickLen * 0.5f, 1, tickLen), Texture2D.whiteTexture);
@@ -1341,7 +1451,7 @@ namespace GeoSniper
                 // Subtle BDC holdover dots (no numbers cluttering the optic)
                 if (i > 0 && isMajor)
                 {
-                    float dotMil = milStep * 0.5f;
+                    float dotMil = milStep * 2f;
                     int dotCount = Mathf.Min(i / 2, 3);
                     for (int wDot = 1; wDot <= dotCount; wDot++)
                     {
@@ -1353,7 +1463,8 @@ namespace GeoSniper
 
             // Windage Ballistics Calculation
             float crosswind = cam != null ? Vector3.Dot(cam.transform.right, BallisticsSystem.Wind) : BallisticsSystem.Wind.x;
-            float windHoldMils = targetDistance > 30f ? (crosswind * (targetDistance / 800f) * 1.5f) : 0f;
+            bool directDuelShot = GeoSniper.Duel.SniperDuelManager.ActiveInstance != null && GeoSniper.Duel.SniperDuelManager.ActiveInstance.HasActiveDuel;
+            float windHoldMils = !directDuelShot && targetDistance > 30f ? (crosswind * (targetDistance / 800f) * 1.5f) : 0f;
             float windPipPx = windHoldMils * milStep;
 
             // Subtle Dynamic Windage Holdover Diamond (clean aim point without text clutter)
@@ -1371,11 +1482,10 @@ namespace GeoSniper
             // Subtle Miss Impact Indicator (small 0.5s pip, no large obstructive HUD cards)
             if (lastMissImpactTimer > 0f && cam != null)
             {
-                Vector3 p = cam.WorldToScreenPoint(lastMissImpactPos);
-                if (p.z > 0.1f)
+                if (TryProjectScopePoint(cam,lastMissImpactPos,width,height,out var p))
                 {
                     float ix = p.x;
-                    float iy = height - p.y;
+                    float iy = p.y;
                     if (Vector2.Distance(new Vector2(ix, iy), new Vector2(width / 2, height / 2)) < d * 0.43f)
                     {
                         float alpha = Mathf.Clamp01(lastMissImpactTimer / 1.0f);
@@ -1389,7 +1499,7 @@ namespace GeoSniper
             // Center crosshair dot
             GUI.color = ThermalMode ? new Color(1f, 0.9f, 0.1f, 0.95f) : new Color(.9f, .15f, .1f, .9f);
             float cx = width / 2f, cy = height / 2f;
-            float bSize = 8f * (d / 600f), bDist = 28f * (d / 600f);
+            float bSize = 5f * (d / 600f), bDist = 22f * (d / 600f);
             GUI.color = (ThermalMode ? new Color(0f, 1f, 0.8f, 0.85f) : new Color(0.05f, 0.08f, 0.1f, 0.85f)) * Mathf.Clamp01(scopeBlend);
             GUI.DrawTexture(new Rect(cx - bDist, cy - bDist, bSize, 1.2f), Texture2D.whiteTexture);
             GUI.DrawTexture(new Rect(cx - bDist, cy - bDist, 1.2f, bSize), Texture2D.whiteTexture);
@@ -1401,30 +1511,25 @@ namespace GeoSniper
             GUI.DrawTexture(new Rect(cx + bDist, cy + bDist - bSize, 1.2f, bSize), Texture2D.whiteTexture);
             Color illColor = ThermalMode ? new Color(1f, 0.95f, 0.2f, 0.95f) : new Color(1f, 0.2f, 0.12f, 0.95f);
             GUI.color = new Color(illColor.r, illColor.g, illColor.b, 0.35f * Mathf.Clamp01(scopeBlend));
-            GUI.DrawTexture(new Rect(cx - 3.5f, cy - 3.5f, 7f, 7f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(cx - 2f, cy - 2f, 4f, 4f), Texture2D.whiteTexture);
             GUI.color = illColor * Mathf.Clamp01(scopeBlend);
-            GUI.DrawTexture(new Rect(cx - 1.5f, cy - 1.5f, 3f, 3f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(cx - .8f, cy - .8f, 1.6f, 1.6f), Texture2D.whiteTexture);
 
             // Digital In-Reticle Rangefinder & Target Classification HUD
-            if (targetDistance > 5f)
+            if (CombatHudPreferences.TacticalDetails && targetDistance > 5f)
             {
-                bool hasLock = currentTargetActor != null && !currentTargetActor.IsDead;
+                bool hasLock = (currentTargetRival != null && !currentTargetRival.IsDead)
+                    || (currentTargetActor != null && !currentTargetActor.IsDead);
                 Color hudColor = hasLock 
                     ? (ThermalMode ? new Color(1f, 0.85f, 0.2f, 0.95f) : new Color(1f, 0.28f, 0.22f, 0.95f))
                     : (ThermalMode ? new Color(0.2f, 1f, 0.85f, 0.85f) : new Color(0.15f, 0.88f, 1f, 0.85f));
                 hudColor.a *= Mathf.Clamp01(scopeBlend);
 
-                var rangeCenterStyle = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = 11,
-                    fontStyle = FontStyle.Bold,
-                    alignment = TextAnchor.MiddleLeft,
-                    normal = { textColor = hudColor }
-                };
+                scopeRangeStyle.normal.textColor = hudColor;
 
                 // Compact military readout placed just right-below center reticle
                 string rangeStr = hasLock ? $"[{targetDistance:F0}m {currentTargetClassification}]" : $"{targetDistance:F0}m";
-                GUI.Label(new Rect(cx + bDist + 6f, cy + 2f, 180f, 18f), rangeStr, rangeCenterStyle);
+                GUI.Label(new Rect(cx + bDist + 6f, cy + 2f, 180f, 18f), rangeStr, scopeRangeStyle);
 
                 // When locked on hostile target, draw subtle corner reticle brackets around center
                 if (hasLock)
@@ -1448,19 +1553,10 @@ namespace GeoSniper
             GUI.color = new Color(1f, 0.25f, 0f, 0.05f * Mathf.Clamp01(scopeBlend));
             GUI.DrawTexture(new Rect(x + 2, y + 2, d - 4, d - 4), scope);
 
-            // Hit marker (X)
-            if (hitMarkerTimer > 0)
-            {
-                var prevMat = GUI.matrix;
-                GUI.color = new Color(1, 1, 1, hitMarkerTimer / 0.2f);
-                GUIUtility.RotateAroundPivot(45, new Vector2(width / 2, height / 2));
-                GUI.DrawTexture(new Rect(width / 2 - 10, height / 2 - 1, 20, 2), Texture2D.whiteTexture);
-                GUI.DrawTexture(new Rect(width / 2 - 1, height / 2 - 10, 2, 20), Texture2D.whiteTexture);
-                GUI.matrix = prevMat;
-            }
+            DrawHitFeedback(width,height);
 
             // Ballistics Telemetry
-            float muzzleVel = CurrentWeaponIndex == 0 ? 853f : CurrentWeaponIndex == 1 ? 790f : 905f;
+            float muzzleVel = WeaponCatalog.Get(CurrentWeaponIndex).Speed;
             float validDist = targetDistance > 5f ? targetDistance : 100f;
             float tof = validDist / muzzleVel;
             float gravity = 9.81f;
@@ -1469,35 +1565,22 @@ namespace GeoSniper
 
             float windSpeed = BallisticsSystem.Wind.magnitude;
             string windArrow = crosswind > 0.4f ? "▶" : crosswind < -0.4f ? "◀" : "●";
-            string zoomStr = (Config != null && Config.zoomLevels != null && Config.zoomLevels.Length > 0 ? (65f / Config.zoomLevels[currentZoomIndex]).ToString("F1") + "×" : "8.0×");
+            string zoomStr = ScopeOptics.Magnification(Config!=null?Config.hipFOV:65,currentFOV).ToString("F1")+"×";
 
             // Tactical Ballistics HUD Readouts (Optic Cyan & Ballistic Amber)
-            var tagStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 8,
-                fontStyle = FontStyle.Bold,
-                normal = { textColor = ThermalMode ? new Color(0.00f, 0.94f, 1.00f, 0.85f) : new Color(0.00f, 0.94f, 1.00f, 0.90f) }
-            };
-            var valStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 11,
-                fontStyle = FontStyle.Bold,
-                normal = { textColor = ThermalMode ? new Color(0.85f, 0.98f, 1.00f, 0.95f) : new Color(0.92f, 0.97f, 1.00f, 0.95f) }
-            };
+            var tagStyle = scopeTagStyle;
+            var valStyle = scopeValueStyle;
+            tagStyle.normal.textColor = ThermalMode ? new Color(0.00f, 0.94f, 1.00f, 0.85f) : new Color(0.00f, 0.94f, 1.00f, 0.90f);
+            valStyle.normal.textColor = ThermalMode ? new Color(0.85f, 0.98f, 1.00f, 0.95f) : new Color(0.92f, 0.97f, 1.00f, 0.95f);
 
             // Top Compass Azimuth Heading Ribbon
-            if (cam != null)
+            if (CombatHudPreferences.TacticalDetails && cam != null)
             {
                 float yawDeg = cam.transform.eulerAngles.y;
                 string dirStr = yawDeg < 22.5f || yawDeg >= 337.5f ? "N" : yawDeg < 67.5f ? "NE" : yawDeg < 112.5f ? "E" : yawDeg < 157.5f ? "SE" : yawDeg < 202.5f ? "S" : yawDeg < 247.5f ? "SW" : yawDeg < 292.5f ? "W" : "NW";
                 string compassHeading = $"AZIMUTH: {yawDeg:000}° {dirStr}";
-                var compStyle = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = 9,
-                    fontStyle = FontStyle.Bold,
-                    alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = new Color(0.00f, 0.94f, 1.00f, 0.85f * Mathf.Clamp01(scopeBlend)) }
-                };
+                var compStyle = scopeCompassStyle;
+                compStyle.normal.textColor = new Color(0.00f, 0.94f, 1.00f, 0.85f * Mathf.Clamp01(scopeBlend));
                 Rect compRect = new Rect(width / 2 - 90, height / 2 - d * 0.44f, 180, 16);
                 GUI.color = new Color(0.067f, 0.078f, 0.090f, 0.75f * Mathf.Clamp01(scopeBlend));
                 GUI.DrawTexture(compRect, Texture2D.whiteTexture);
@@ -1507,65 +1590,29 @@ namespace GeoSniper
                 GUI.Label(compRect, compassHeading, compStyle);
             }
 
-            // 1. TOP-LEFT: RANGEFINDER (Target Distance)
-            float tlX = width / 2 - d * 0.38f;
-            float tlY = height / 2 - d * 0.32f;
-            GUI.color = new Color(0.067f, 0.078f, 0.090f, 0.65f * Mathf.Clamp01(scopeBlend));
-            GUI.DrawTexture(new Rect(tlX - 6, tlY - 4, 130, 36), Texture2D.whiteTexture);
-            GUI.color = new Color(0.00f, 0.94f, 1.00f, 0.50f * Mathf.Clamp01(scopeBlend));
-            GUI.DrawTexture(new Rect(tlX - 6, tlY - 4, 2, 36), Texture2D.whiteTexture);
-            GUI.Label(new Rect(tlX, tlY, 120, 14), "// RANGEFINDER", tagStyle);
-            GUI.Label(new Rect(tlX, tlY + 12, 140, 20), targetDistance > 0 ? $"{targetDistance:F0} M" : "--- M", valStyle);
-
-            // 2. TOP-RIGHT: WINDAGE (Speed, Direction & Holdover Correction)
-            float trX = width / 2 + d * 0.18f;
-            float trY = height / 2 - d * 0.32f;
-            GUI.color = new Color(0.067f, 0.078f, 0.090f, 0.65f * Mathf.Clamp01(scopeBlend));
-            GUI.DrawTexture(new Rect(trX - 6, trY - 4, 150, 36), Texture2D.whiteTexture);
-            GUI.color = new Color(1.00f, 0.60f, 0.00f, 0.50f * Mathf.Clamp01(scopeBlend));
-            GUI.DrawTexture(new Rect(trX - 6, trY - 4, 2, 36), Texture2D.whiteTexture);
-            GUI.Label(new Rect(trX, trY, 150, 14), "// WIND DEFLECTION", tagStyle);
-            GUI.Label(new Rect(trX, trY + 12, 150, 20), $"{windSpeed:F1} M/S {windArrow} ({(crosswind >= 0 ? "+" : "")}{windHoldMils:F1} MIL)", valStyle);
-
-            // 3. BOTTOM-LEFT: ELEVATION / BULLET DROP (Mil holdover & drop in meters)
-            float blX = width / 2 - d * 0.38f;
-            float blY = height / 2 + d * 0.22f;
-            GUI.color = new Color(0.067f, 0.078f, 0.090f, 0.65f * Mathf.Clamp01(scopeBlend));
-            GUI.DrawTexture(new Rect(blX - 6, blY - 4, 130, 36), Texture2D.whiteTexture);
-            GUI.color = new Color(0.00f, 0.94f, 1.00f, 0.50f * Mathf.Clamp01(scopeBlend));
-            GUI.DrawTexture(new Rect(blX - 6, blY - 4, 2, 36), Texture2D.whiteTexture);
-            GUI.Label(new Rect(blX, blY, 140, 14), "// BDC ELEVATION", tagStyle);
-            GUI.Label(new Rect(blX, blY + 12, 140, 20), $"+{milDrop:F1} MIL ({dropM:F2}m)", valStyle);
-
-            // 4. BOTTOM-RIGHT: OPTIC ZOOM & AMMO
-            float brX = width / 2 + d * 0.18f;
-            float brY = height / 2 + d * 0.22f;
-            GUI.color = new Color(0.067f, 0.078f, 0.090f, 0.65f * Mathf.Clamp01(scopeBlend));
-            GUI.DrawTexture(new Rect(brX - 6, brY - 4, 150, 36), Texture2D.whiteTexture);
-            GUI.color = new Color(0.00f, 0.98f, 0.40f, 0.50f * Mathf.Clamp01(scopeBlend));
-            GUI.DrawTexture(new Rect(brX - 6, brY - 4, 2, 36), Texture2D.whiteTexture);
-            GUI.Label(new Rect(brX, brY, 150, 14), "// CHAMBER / AMMO", tagStyle);
-            string ammoDisplay = isReloading ? "RELOAD..." : (currentAmmo >= 0 ? $"{currentAmmo} / {MaxAmmo}" : $"{MaxAmmo}");
-            GUI.Label(new Rect(brX, brY + 12, 150, 20), $"{zoomStr}  |  {ammoDisplay} RDS", valStyle);
+            // Essential readings sit in the black optic wings when landscape space permits.
+            // Narrow screens retain compact corner readings, leaving the aiming point clear.
+            var instruments = CombatHudPreferences.ScopeInstruments(width, height, CombatHudPreferences.SafeCanvas(width, height));
+            bool details = CombatHudPreferences.TacticalDetails;
+            DrawScopeInstrument(instruments[0], "RANGE", targetDistance > 0 ? $"{targetDistance:F0} m" : "— m", new Color(0f, .94f, 1f));
+            DrawScopeInstrument(instruments[1], directDuelShot ? "WIND HOLD" : $"WIND {windSpeed:F1} m/s", directDuelShot ? "0.0 mil" : $"{windArrow} {windHoldMils:+0.0;-0.0;0.0} mil", new Color(1f, .65f, .2f));
+            DrawScopeInstrument(instruments[2], details && !directDuelShot ? $"DROP {dropM:F2} m" : "BULLET DROP", directDuelShot ? "0.0 mil" : $"+{milDrop:F1} mil", new Color(0f, .94f, 1f));
+            string ammoDisplay = isReloading ? "RELOADING" : currentAmmo >= 0 ? $"{currentAmmo} / {MaxAmmo}" : MaxAmmo.ToString();
+            DrawScopeInstrument(instruments[3], "AMMO · " + zoomStr, ammoDisplay,
+                isReloading || currentAmmo == 0 ? new Color(1f, .65f, .2f) : new Color(.3f, .95f, .5f));
 
             // Thermal Mode minimal badge
             if (ThermalMode)
             {
-                var flirStyle = new GUIStyle(GUI.skin.label) { fontSize = 10, fontStyle = FontStyle.Bold, normal = { textColor = new Color(0f, 1f, 0.8f, 0.85f) } };
-                GUI.Label(new Rect(width / 2 - 40, height / 2 - d * 0.38f, 80, 16), "FLIR THERMAL", flirStyle);
+                scopeFlirStyle.normal.textColor = new Color(0f, 1f, 0.8f, .85f);
+                GUI.Label(new Rect(width / 2 - 60, height / 2 - d * 0.38f, 120, 22), "FLIR THERMAL", scopeFlirStyle);
             }
 
             // Kill confirmation
             if (killTimer > 0)
             {
-                GUIStyle killStyle = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = 18,
-                    fontStyle = FontStyle.Bold,
-                    alignment = TextAnchor.MiddleCenter,
-                    normal = { textColor = new Color(1f, 0.2f, 0.1f, Mathf.Min(1f, killTimer)) }
-                };
-                GUI.Label(new Rect(width / 2 - 100, height / 2 - d * 0.2f, 200, 50), "ELIMINATED", killStyle);
+                scopeKillStyle.normal.textColor = new Color(1f, 0.2f, 0.1f, Mathf.Min(1f, killTimer));
+                GUI.Label(new Rect(width / 2 - 100, height / 2 - d * 0.2f, 200, 50), "ELIMINATED", scopeKillStyle);
             }
 
             // Breath stamina meter (only visible when holding breath or recovering stamina)
@@ -1583,6 +1630,48 @@ namespace GeoSniper
                 GUI.color = Color.white;
             }
         }
+
+        // All camera projections use the same logical coordinate space as the
+        // scaled mission GUI, including cameras with a partial-screen viewport.
+        public static bool TryProjectScopePoint(Camera camera,Vector3 world,float width,float height,out Vector2 guiPoint)
+        {
+            guiPoint=Vector2.zero;
+            if(camera==null || !float.IsFinite(width) || !float.IsFinite(height) || width<=0 || height<=0)return false;
+            var viewport=camera.WorldToViewportPoint(world);
+            if(viewport.z<=.1f || !float.IsFinite(viewport.x) || !float.IsFinite(viewport.y))return false;
+            var rect=camera.rect;
+            guiPoint=new Vector2((rect.x+viewport.x*rect.width)*width,(1-rect.y-viewport.y*rect.height)*height);
+            return true;
+        }
+
+        void DrawScopeInstrument(Rect rect, string label, string value, Color accent)
+        {
+            float alpha = Mathf.Clamp01(scopeBlend);
+            GUI.color = new Color(.02f, .035f, .05f, .56f * alpha);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = new Color(accent.r, accent.g, accent.b, .7f * alpha);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, 2, rect.height), Texture2D.whiteTexture);
+            GUI.color = new Color(1, 1, 1, alpha);
+            var title = GUIStyleCache.Get(CombatHudPreferences.ScopeLabelFont, FontStyle.Bold, TextAnchor.MiddleLeft, accent);
+            var reading = GUIStyleCache.Get(value.Length > 16 ? 16 : CombatHudPreferences.ScopeValueFont, FontStyle.Bold, TextAnchor.MiddleLeft, Color.white);
+            GUI.Label(new Rect(rect.x + 10, rect.y + 4, rect.width - 18, 18), label, title);
+            GUI.Label(new Rect(rect.x + 10, rect.y + 22, rect.width - 18, 26), value, reading);
+            GUI.color = Color.white;
+        }
+
+        void EnsureScopeStyles()
+        {
+            if(scopeTagStyle!=null)return;
+            scopeTagStyle=ScopeStyle(12,TextAnchor.UpperLeft);
+            scopeValueStyle=ScopeStyle(18,TextAnchor.UpperLeft);
+            scopeCompassStyle=ScopeStyle(13,TextAnchor.MiddleCenter);
+            scopeRangeStyle=ScopeStyle(14,TextAnchor.MiddleLeft);
+            scopeFlirStyle=ScopeStyle(13,TextAnchor.UpperLeft);
+            scopeKillStyle=ScopeStyle(18,TextAnchor.MiddleCenter);
+        }
+
+        static GUIStyle ScopeStyle(int size,TextAnchor alignment) => new GUIStyle(GUI.skin.label)
+        {fontSize=size,fontStyle=FontStyle.Bold,alignment=alignment};
 
         void OnGUI()
         {
@@ -1644,11 +1733,19 @@ namespace GeoSniper
 
         void OnDestroy()
         {
-            if(rifle!=null) Destroy(rifle.gameObject);
-            if(combatKnife!=null) Destroy(combatKnife.gameObject);
-            if(muzzleFlash!=null) Destroy(muzzleFlash);
-            if(tracerLine!=null) Destroy(tracerLine.gameObject);
-            foreach(var item in owned) Destroy(item); TimeScaleController.ClearHitCam();
+            if(thermalOverlay!=null)thermalOverlay.SetScopeState(false,0,null);
+            if(rifle!=null) DestroyPresentationObject(rifle.gameObject);
+            if(combatKnife!=null) DestroyPresentationObject(combatKnife.gameObject);
+            if(muzzleFlash!=null) DestroyPresentationObject(muzzleFlash);
+            if(tracerLine!=null) DestroyPresentationObject(tracerLine.gameObject);
+            foreach(var item in owned) DestroyPresentationObject(item); TimeScaleController.ClearHitCam();
+        }
+
+        static void DestroyPresentationObject(UnityEngine.Object item)
+        {
+            if(item==null) return;
+            if(Application.isPlaying) Destroy(item);
+            else DestroyImmediate(item);
         }
     }
 }

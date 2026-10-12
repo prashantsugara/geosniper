@@ -149,14 +149,9 @@ namespace GeoSniper
             var explosive=GetComponent<ExplosiveProp>();
             if(explosive!=null && explosive.isDetonated){currentSpeed=0;brakeLights?.SetState(false,false);return;}
             float dt=Mathf.Clamp(deltaTime,0,.05f);
-            int index=Mathf.Clamp(currentWaypointIndex,0,path.Count-1);
-            int previous=Mathf.Clamp(index-directionStep,0,path.Count-1);
-            Vector3 segment=path[index]-path[previous];segment.y=0;
-            Vector3 right=segment.sqrMagnitude>.01f?Vector3.Cross(Vector3.up,segment.normalized):transform.right;
-            Vector3 target=path[index]+right*laneOffset;
-            Vector3 toEnd=target-transform.position;toEnd.y=0;
-            float remaining=toEnd.magnitude;
-            if(currentWaypointIndex==path.Count-1 && remaining<30f && Time.time>=nextRouteRefresh)
+            currentWaypointIndex=Mathf.Clamp(currentWaypointIndex,0,path.Count-1);
+            Vector3 endpointGap=path[currentWaypointIndex]-transform.position;endpointGap.y=0;
+            if(directionStep>0 && currentWaypointIndex==path.Count-1 && endpointGap.magnitude<30f && Time.time>=nextRouteRefresh)
             {
                 nextRouteRefresh=Time.time+5f;
                 if(TryRefreshRoute())
@@ -164,9 +159,16 @@ namespace GeoSniper
                     routeEnded=false;
                     if(currentWaypointIndex>32)
                     {int trim=currentWaypointIndex-2;path.RemoveRange(0,trim);currentWaypointIndex-=trim;}
-                    index=currentWaypointIndex;
                 }
             }
+            // Route mutations must precede every segment/index calculation.
+            int index=Mathf.Clamp(currentWaypointIndex,0,path.Count-1);
+            int previous=Mathf.Clamp(index-directionStep,0,path.Count-1);
+            Vector3 segment=path[index]-path[previous];segment.y=0;
+            Vector3 right=segment.sqrMagnitude>.01f?Vector3.Cross(Vector3.up,segment.normalized):transform.right;
+            Vector3 target=path[index]+right*laneOffset;
+            Vector3 toEnd=target-transform.position;toEnd.y=0;
+            float remaining=toEnd.magnitude;
             // Follow a point a few metres ahead on the lane instead of aiming at a distant endpoint.
             Vector3 laneStart=path[previous]+right*laneOffset;
             float fraction=Mathf.Clamp01(Vector3.Dot(transform.position-laneStart,segment)/Mathf.Max(.01f,segment.sqrMagnitude));

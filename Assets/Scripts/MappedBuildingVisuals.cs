@@ -55,7 +55,9 @@ namespace GeoSniper
             if(assets.Length==0 || !selected.Contains(feature) || !TryFit(feature,out var center,out var along,out var size)) return false;
             int hash=Mathf.RoundToInt(center.x*13+center.y*7);
             int index=(hash&int.MaxValue)%assets.Length;
-            if(surfaces[index].mainTexture==null) return false;
+            bool downloadedHouse=assets[index].name=="HouseInteriorSF" || assets[index].name=="HouseLayoutCG";
+            if(downloadedHouse && (feature.Height>7 || size.x>30 || size.y>26))return false;
+            if(surfaces[index].mainTexture==null && !downloadedHouse) return false;
             var wrapper=new GameObject("Mapped asset facade"); wrapper.transform.SetParent(parent,false);
             Object.Instantiate(assets[index],wrapper.transform,false);
             var bounds=ImportedVisual.LocalBounds(wrapper.transform);
@@ -70,7 +72,7 @@ namespace GeoSniper
             wrapper.transform.localRotation=rotation;
             wrapper.transform.localScale=scale;
             wrapper.transform.localPosition=new Vector3(center.x,0,center.y)-rotation*Vector3.Scale(new Vector3(bounds.center.x,bounds.min.y,bounds.center.z),scale);
-            foreach(var r in wrapper.GetComponentsInChildren<Renderer>()) r.sharedMaterial=surfaces[index];
+            if(!downloadedHouse)foreach(var r in wrapper.GetComponentsInChildren<Renderer>()) r.sharedMaterial=surfaces[index];
             return true;
         }
     }

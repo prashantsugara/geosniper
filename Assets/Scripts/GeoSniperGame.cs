@@ -15,7 +15,7 @@ namespace GeoSniper
         public static bool IsDebugMode
         {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            get => PlayerPrefs.GetInt("GeoSniper.DebugMode", 1) == 1;
+            get => PlayerPrefs.GetInt("GeoSniper.DebugMode", 0) == 1;
             set => PlayerPrefs.SetInt("GeoSniper.DebugMode", value ? 1 : 0);
 #else
             get => false;
@@ -25,9 +25,24 @@ namespace GeoSniper
 
         void OnApplicationPause(bool pauseStatus)
         {
+            if(pauseStatus && loading)TrackDeployment("deployment_backgrounded","");
+            if(pauseStatus) loadingPausedAt=Time.realtimeSinceStartup;
+            else ResumeLoadingAfterPause(Time.realtimeSinceStartup);
             if (pauseStatus) PlayerPrefs.Save();
         }
+        void ResumeLoadingAfterPause(float resumedAt)
+        {
+            if(loadingPausedAt<0)return;
+            if(loading)
+            {
+                float paused=Mathf.Max(0,resumedAt-loadingPausedAt);
+                loadingDeadline+=paused;
+                worldLoadingStarted+=paused;
+            }
+            loadingPausedAt=-1;
+        }
         float loadingDeadline;
+        float loadingPausedAt=-1,worldLoadingStarted;
         Camera view;
         float yaw=30, pitch=48, distance=230;
         SectorWorld world;
@@ -75,13 +90,57 @@ namespace GeoSniper
         bool showingSettings;
         AudioSource lobbyMusic;
         AudioClip lobbyMusicClip;
-        bool economyRewardOffer;
-        string economyRewardType="";
-        int economyRewardAmount;
-        string economyNotice="";
         // A mission can request location from any lobby screen. Keep that intent while the
         // privacy prompt is visible so accepting location does not silently switch modes.
         bool resumeMissionAfterLocationConsent;
+        bool duelLocationSelection;
+
+        public void OpenDuelLobby()
+        {
+            if (loading || ready) return;
+            SwitchTab(LobbyTab.Home);
+            duelLocationSelection = false;
+            showingLocationConsent = false;
+            resumeMissionAfterLocationConsent = false;
+            loadFailed = false;
+            PlayerPrefs.SetInt("GeoSniper.SelectedMode", 3);
+            PlayerPrefs.Save();
+            GeoSniper.Duel.SniperDuelHUD.Instance.ShowLobbyModal = true;
+        }
+
+        void ClearDuelDeploymentIntent()
+        {
+            if (GeoSniper.Duel.SniperDuelHUD.LobbyModalOpen)
+                GeoSniper.Duel.SniperDuelHUD.Instance.ShowLobbyModal = false;
+            var network = GeoSniper.Duel.SniperDuelNetwork.ActiveInstance;
+            var duel = GeoSniper.Duel.SniperDuelManager.ActiveInstance;
+            if (duel != null)
+                duel.ResetSession("Switched from duel to another game mode.");
+            else if (network != null && (network.IsHost || network.IsConnected || network.IsConnecting || network.IsReconnecting))
+                network.Disconnect("Switched from duel to another game mode.");
+            pendingMultiplayerDuel = false; pendingDuelHost = false; pendingDuelTarget = "";
+            duelLocationSelection = false;
+            resumeMissionAfterLocationConsent = false; showingLocationConsent = false;
+        }
+
+        void SelectLobbyMode(int mode)
+        {
+            mode = Mathf.Clamp(mode, 0, 3);
+            if (mode == 3) { OpenDuelLobby(); return; }
+            ClearDuelDeploymentIntent();
+            PlayerPrefs.SetInt("GeoSniper.SelectedMode", mode);
+            PlayerPrefs.Save();
+            loadFailed = false;
+            SwitchTab(mode == 0 ? LobbyTab.Campaign : LobbyTab.Home);
+        }
+
+        public void ChooseDuelLocation(bool useLiveLocation)
+        {
+            GeoSniper.Duel.SniperDuelHUD.Instance.ShowLobbyModal = false;
+            duelLocationSelection = true;
+            if (useLiveLocation) showingLocationConsent = true;
+            else SwitchTab(LobbyTab.Location);
+        }
 
         public enum LobbyTab
         {
@@ -96,7 +155,12 @@ namespace GeoSniper
 
         public void SwitchTab(LobbyTab tab)
         {
+            if(tab==LobbyTab.Armory && currentTab!=LobbyTab.Armory) armoryCategory=-1;
+            if(CustomizingTouchControls) EndTouchControlLayout(false);
             if(tab==LobbyTab.Location && !ReleaseConfiguration.Current.liveMapsEnabled) tab=LobbyTab.Home;
+            if (tab == LobbyTab.Campaign || (duelLocationSelection && tab != LobbyTab.Location && tab != LobbyTab.Home))
+                ClearDuelDeploymentIntent();
+            if(tab==LobbyTab.Home){campaignLocationEdit=false;campaignBriefingReviewed=false;returnToCampaignFromArmory=false;}
             currentTab = tab;
             choosingStage = (tab == LobbyTab.Campaign);
             showingArmory = (tab == LobbyTab.Armory);
@@ -108,8 +172,12 @@ namespace GeoSniper
             else StopBriefingAudio();
         }
 
-        public void DeployPvPDuel(bool asHost, string roomCodeOrIp = "", bool isPracticeBot = false)
+        public void DeployPvPDuel(bool asHost, string roomCodeOrIp = "", bool isPracticeBot = false, GameLocation hostLocation = null, bool useLiveLocation = false)
         {
+            if (loading) return;
+            if (asHost && !isPracticeBot && hostLocation == null && !useLiveLocation)
+            { ChooseDuelLocation(false); return; }
+            duelLocationSelection = false;
             PlayerPrefs.SetInt("GeoSniper.SelectedMode", 3);
             PlayerPrefs.Save();
             loadFailed = false; status = ""; mapNotice = "";
@@ -130,16 +198,23 @@ namespace GeoSniper
             {
                 if (asHost)
                 {
-                    GeoSniper.Duel.SniperDuelNetwork.Instance?.StartHost();
+                    if (!GeoSniper.Duel.SniperDuelNetwork.Instance.IsHost && !GeoSniper.Duel.SniperDuelNetwork.Instance.StartHost())
+                    { LoadingFailed(new System.InvalidOperationException(GeoSniper.Duel.SniperDuelNetwork.Instance.LastDisconnectReason)); return; }
                 }
                 else if (!string.IsNullOrEmpty(roomCodeOrIp))
                 {
-                    GeoSniper.Duel.SniperDuelNetwork.Instance?.StartClient(roomCodeOrIp);
+                    if (!GeoSniper.Duel.SniperDuelNetwork.Instance.StartClient(roomCodeOrIp))
+                    { LoadingFailed(new System.InvalidOperationException(GeoSniper.Duel.SniperDuelNetwork.Instance.LastDisconnectReason)); return; }
                 }
             }
 
+            if (!isPracticeBot)
+            {
+                StartCoroutine(asHost ? LoadHostDuelMap(hostLocation, useLiveLocation) : LoadGuestDuelMap());
+                return;
+            }
             // If an existing sector is already loaded in memory, reuse it immediately
-            if (world != null && cachedSectorReady && world.SpawnPoints != null && world.SpawnPoints.Count > 0)
+            if (isPracticeBot && world != null && cachedSectorReady && world.SpawnPoints != null && world.SpawnPoints.Count > 0)
             {
                 if (armoryRoom != null) armoryRoom.SetActive(false);
                 if (sectorSun != null) sectorSun.enabled = true;
@@ -152,13 +227,94 @@ namespace GeoSniper
             }
         }
 
+        void PrepareSharedDuelLoading()
+        {
+            if (armoryRoom != null) armoryRoom.SetActive(false);
+            if (sectorSun != null) sectorSun.enabled = true;
+            loading = true; ready = false; loadFailed = false; choosingLocation = false;
+            startupStage = "DUEL MAP"; loadingDeadline = Time.realtimeSinceStartup + 180;
+            if (mission != null) { mission.enabled = false; Destroy(mission); mission = null; }
+            if (streamer != null) { streamer.StopAndPreserveFirstSector(); Destroy(streamer); streamer = null; }
+            DiscardCachedSector();
+        }
+
+        IEnumerator LoadHostDuelMap(GameLocation location, bool useLiveLocation)
+        {
+            PrepareSharedDuelLoading();
+            var relay = GeoSniper.Duel.SniperDuelNetwork.Instance;
+            status = "CREATING UNITY RELAY ROOM...";
+            while(relay.IsRelayStarting) yield return null;
+            if(!relay.IsHost) { LoadingFailed(new System.InvalidOperationException(relay.LastDisconnectReason)); yield break; }
+            status = useLiveLocation ? "FINDING HOST'S LIVE LOCATION..." : "LOADING HOST'S CHOSEN LOCATION...";
+            if (useLiveLocation) yield return new LocationResolver().Resolve(message => status = message, result => location = result);
+            if (location == null)
+            {
+                loading = false; duelLocationSelection = true;
+                locationError = "No accurate GPS fix. Retry live location or choose a place for your duel.";
+                SwitchTab(LobbyTab.Location);
+                yield break;
+            }
+            activeLocation = location;
+            loadingDeadline = Time.realtimeSinceStartup + SectorMap.LoadTimeoutSeconds;
+            System.Collections.Generic.List<MapFeature> features = null;
+            bool offline = true;
+            yield return SectorMap.Load(location, overpassEndpoint, (map, fallback) => { features = map; offline = fallback; }, message => status = message, refresh: false);
+            if (features == null || offline)
+            {
+                LoadingFailed(new System.InvalidOperationException("The selected location's map could not be loaded. Choose another place or retry."));
+                yield break;
+            }
+            geographicMap = true; mapNotice = SectorMap.LastSource;
+            world = new GameObject("Host duel sector").AddComponent<SectorWorld>();
+            world.SourceLabel = mapNotice;
+            loadingDeadline = Time.realtimeSinceStartup + 90;
+            if (enableElevationForGameplay) yield return SectorElevation.Load(location, message => status = message, elevation => world.Elevation = elevation);
+            byte[] mapData;
+            try
+            {
+                mapData = new GeoSniper.Duel.DuelMapSnapshot
+                {
+                    Location = location, Source = mapNotice, Features = features,
+                    ElevationAvailable = world.Elevation.Available, Heights = world.Elevation.Heights
+                }.Encode();
+                GeoSniper.Duel.SniperDuelNetwork.Instance.SetHostMap(mapData, location.Latitude, location.Longitude);
+            }
+            catch (System.Exception error) { LoadingFailed(error); yield break; }
+            SectorElevation.LastNotice = world.Elevation.Notice;
+            yield return BuildSector(features);
+        }
+
+        IEnumerator LoadGuestDuelMap()
+        {
+            PrepareSharedDuelLoading();
+            var network = GeoSniper.Duel.SniperDuelNetwork.Instance;
+            loadingDeadline = Time.realtimeSinceStartup + 600;
+            status = "WAITING FOR THE HOST TO CHOOSE AND SHARE THE DUEL LOCATION...";
+            while (network.SharedMapData == null && (network.IsConnected || network.IsConnecting)) yield return null;
+            if (network.SharedMapData == null)
+            { LoadingFailed(new System.InvalidOperationException(network.LastDisconnectReason)); yield break; }
+            GeoSniper.Duel.DuelMapSnapshot snapshot;
+            try { snapshot = GeoSniper.Duel.DuelMapSnapshot.Decode(network.SharedMapData); }
+            catch (System.Exception error) { LoadingFailed(error); yield break; }
+            activeLocation = snapshot.Location;
+            geographicMap = true; mapNotice = snapshot.Source;
+            status = "LOADING HOST'S LOCATION: " + activeLocation.Label;
+            world = new GameObject("Shared host duel sector").AddComponent<SectorWorld>();
+            world.SourceLabel = snapshot.Source;
+            world.Elevation.Available = snapshot.ElevationAvailable;
+            System.Array.Copy(snapshot.Heights, world.Elevation.Heights, snapshot.Heights.Length);
+            world.Elevation.Notice = "Terrain shared by duel host";
+            SectorElevation.LastNotice = world.Elevation.Notice;
+            yield return BuildSector(snapshot.Features);
+        }
+
         void ExecuteDeploy(bool useLiveLocation=false)
         {
             loadFailed=false; status=""; mapNotice="";
             int sel = Mathf.Clamp(PlayerPrefs.GetInt("GeoSniper.SelectedMode",0),0,3);
             if (sel == 3)
             {
-                DeployPvPDuel(false, "", true);
+                OpenDuelLobby();
                 return;
             }
             PrepareDeployment(sel);
@@ -167,6 +323,7 @@ namespace GeoSniper
 
         void PrepareDeployment(int selectedMode)
         {
+            if (selectedMode != 3) ClearDuelDeploymentIntent();
             rangeToStart = selectedMode == 2;
             if (selectedMode == 0) // Campaign
             {
@@ -244,6 +401,7 @@ namespace GeoSniper
 
         void StartPreferredLocationMission(bool useLiveLocation=false)
         {
+            if(CheckCampaignWeaponReadiness(useLiveLocation)) return;
             GameLocation location=useLiveLocation?null:PreferredLocation();
             if(location!=null)
             {
@@ -251,6 +409,14 @@ namespace GeoSniper
                 return;
             }
             resumeMissionAfterLocationConsent=true;
+            if(campaignBriefingReviewed)
+            {
+                // An explicit GPS source choice already expresses the player's intent.
+                // LocationResolver still obtains the operating system's permission.
+                if(LocationSelectionPolicy.RequiresLiveFix(PlayerPrefs.GetString("GeoSniper.LocationSource","")))
+                {resumeMissionAfterLocationConsent=false;StartCoroutine(Play(null,true));return;}
+                campaignLocationEdit=true;SwitchTab(LobbyTab.Location);return;
+            }
             showingLocationConsent=true;
         }
 
@@ -290,17 +456,22 @@ namespace GeoSniper
             mission.Begin(view, safeSpawns, safeRoofs, !prepareContract, activeLocation, geographicMap, spawn, prepareContract);
             if (isPvPDuel)
             {
-                mission.BeginPvPDuel(campaignNodeToStart);
+                mission.BeginPvPDuel(campaignNodeToStart, pendingMultiplayerDuel);
                 if (pendingMultiplayerDuel && GeoSniper.Duel.SniperDuelManager.Instance != null)
                 {
                     GeoSniper.Duel.SniperDuelManager.Instance.StartDuelMatch(mission, pendingDuelHost, pendingDuelTarget);
                     pendingMultiplayerDuel = false;
                 }
             }
-            else if (stageIndexToStart >= 0) mission.BeginStage(stageIndexToStart);
+            else if (stageIndexToStart >= 0)
+            {
+                mission.BeginStage(stageIndexToStart);
+                if(campaignBriefingReviewed && mission.currentMissionState==MissionState.Briefing)mission.StartPreparedCampaign();
+            }
             else if (rangeToStart) mission.BeginRange();
+            campaignBriefingReviewed=false;campaignLocationEdit=false;
 
-            if (activeLocation != null && geographicMap && mission != null && mission.Player != null)
+            if (!isPvPDuel && activeLocation != null && geographicMap && mission != null && mission.Player != null)
             {
                 try
                 {
@@ -315,7 +486,13 @@ namespace GeoSniper
             }
 
             loading = false;
+            EndDeploymentTracking("deployment_completed");
             ready = true;
+            GameAnalyticsManager.TrackCustomEvent("first_playable_frame",new System.Collections.Generic.Dictionary<string,object>{
+                {"stage_index",stageIndexToStart+1},
+                {"duration_sec",Mathf.RoundToInt(Time.realtimeSinceStartup-deploymentStartedAt)},
+                {"attempt_id",GameAnalyticsManager.CurrentDeploymentAttempt}
+            });
             loadFailed = false;
             status = "";
             mapNotice = "";
@@ -387,17 +564,7 @@ namespace GeoSniper
             RenderSettings.fogColor=new Color(.76f,.82f,.88f);
             RenderSettings.fogDensity=0.0014f;
             EnsureMainCamera();
-            if (!PlayerPrefs.HasKey("GeoSniper.WeaponUnlocked_1"))
-            {
-                PlayerPrefs.SetInt("GeoSniper.WeaponUnlocked_1", 1);
-                PlayerPrefs.SetInt("GeoSniper.WeaponUnlocked_0", 0);
-                PlayerPrefs.SetInt("GeoSniper.WeaponUnlocked_2", 0);
-                if (PlayerPrefs.GetInt("GeoSniper.SelectedWeapon", 0) == 0 && PlayerPrefs.GetInt("GeoSniper.WeaponUnlocked_0", 0) == 0 && !IsDebugMode)
-                {
-                    PlayerPrefs.SetInt("GeoSniper.SelectedWeapon", 1);
-                }
-                PlayerPrefs.Save();
-            }
+            WeaponCatalog.EnsureStarterLoadout();
             BuildArmory();
         }
 
@@ -438,8 +605,8 @@ namespace GeoSniper
             keyLightObj.transform.SetParent(armoryRoom.transform, false);
             var keyLight = keyLightObj.AddComponent<Light>();
             keyLight.type = LightType.Directional;
-            keyLight.intensity = 1.05f;
-            keyLight.color = new Color(1f, 0.96f, 0.92f);
+            keyLight.intensity = 1.15f;
+            keyLight.color = new Color(1f, 0.68f, 0.38f);
             keyLight.transform.rotation = Quaternion.Euler(24f, -28f, 0f);
 
             // Rim / Edge Light for Silhouette (Crisp Daylight Rim, no blue blowout)
@@ -447,8 +614,8 @@ namespace GeoSniper
             rimLightObj.transform.SetParent(armoryRoom.transform, false);
             var rimLight = rimLightObj.AddComponent<Light>();
             rimLight.type = LightType.Directional;
-            rimLight.intensity = 0.50f;
-            rimLight.color = new Color(0.85f, 0.88f, 0.92f);
+            rimLight.intensity = 0.85f;
+            rimLight.color = new Color(0.22f, 0.70f, 1f);
             rimLight.transform.rotation = Quaternion.Euler(-15f, 155f, 0f);
 
             // Soft Fill Light from camera angle
@@ -457,40 +624,12 @@ namespace GeoSniper
             var fillLight = fillLightObj.AddComponent<Light>();
             fillLight.type = LightType.Directional;
             fillLight.intensity = 0.35f;
-            fillLight.color = new Color(0.75f, 0.76f, 0.80f);
+            fillLight.color = new Color(0.55f, 0.73f, 0.92f);
             fillLight.transform.rotation = Quaternion.Euler(15f, 40f, 0f);
 
             // Ambient light for natural shadow fill
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.18f, 0.20f, 0.23f);
-
-            // Staging Pedestal Platform
-            var pedestal = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            pedestal.name = "StagingPedestal";
-            pedestal.transform.SetParent(armoryRoom.transform, false);
-            pedestal.transform.position = new Vector3(0.05f, 0.02f, 3.1f);
-            pedestal.transform.localScale = new Vector3(2.4f, 0.04f, 2.4f);
-            var pedMat = new Material(Shader.Find("Unlit/Color") ?? Shader.Find("Diffuse"));
-            pedMat.color = new Color(0.07f, 0.09f, 0.12f);
-            if (pedMat.HasProperty("_Metallic")) pedMat.SetFloat("_Metallic", 0.75f);
-            if (pedMat.HasProperty("_Glossiness")) pedMat.SetFloat("_Glossiness", 0.75f);
-            pedestal.GetComponent<Renderer>().sharedMaterial = pedMat;
-            var pedCol = pedestal.GetComponent<Collider>();
-            if (pedCol != null) Destroy(pedCol);
-
-            // Pedestal Glowing Rim Ring
-            var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            ring.name = "PedestalRim";
-            ring.transform.SetParent(pedestal.transform, false);
-            ring.transform.localPosition = new Vector3(0, 0.48f, 0);
-            ring.transform.localScale = new Vector3(1.02f, 0.15f, 1.02f);
-            var ringMat = new Material(Shader.Find("Unlit/Color") ?? Shader.Find("Standard"));
-            ringMat.color = new Color(0.35f, 0.25f, 0.11f);
-            lobbyStageMaterials.Add(pedMat);
-            lobbyStageMaterials.Add(ringMat);
-            ring.GetComponent<Renderer>().sharedMaterial = ringMat;
-            var ringCol = ring.GetComponent<Collider>();
-            if (ringCol != null) Destroy(ringCol);
+            RenderSettings.ambientLight = new Color(0.25f, 0.28f, 0.34f);
 
             // 3D Soldier Operative
             var soldierPrefab = Resources.Load<GameObject>("Models/Enemies/swat") 
@@ -632,40 +771,14 @@ namespace GeoSniper
 
         void ApplyLobbyRifleMaterials(Transform root)
         {
-            if (root == null) return;
-            var gunmetalShader = Shader.Find("Standard") ?? Shader.Find("Mobile/Diffuse");
-            var metalMat = new Material(gunmetalShader) { color = new Color(0.12f, 0.13f, 0.14f) };
-            if (metalMat.HasProperty("_Metallic")) metalMat.SetFloat("_Metallic", 0.60f);
-            if (metalMat.HasProperty("_Glossiness")) metalMat.SetFloat("_Glossiness", 0.40f);
-
-            var polyMat = new Material(gunmetalShader) { color = new Color(0.15f, 0.16f, 0.15f) };
-            if (polyMat.HasProperty("_Metallic")) polyMat.SetFloat("_Metallic", 0.0f);
-            if (polyMat.HasProperty("_Glossiness")) polyMat.SetFloat("_Glossiness", 0.15f);
-
-            var coatedOpticShader = Shader.Find("GeoSniper/CoatedOptic") ?? gunmetalShader;
-            var glassMat = new Material(coatedOpticShader) { color = new Color(0.035f, 0.14f, 0.22f) };
-            if (glassMat.HasProperty("_Metallic")) glassMat.SetFloat("_Metallic", 0.85f);
-            if (glassMat.HasProperty("_Glossiness")) glassMat.SetFloat("_Glossiness", 0.98f);
-
-            lobbyRifleMaterials.Add(metalMat); lobbyRifleMaterials.Add(polyMat); lobbyRifleMaterials.Add(glassMat);
-            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
-            {
-                if (r == null) continue;
-                string n = r.gameObject.name.ToLowerInvariant();
-                if (n.Contains("lens") || n.Contains("glass") || n.Contains("optic"))
-                    r.sharedMaterial = glassMat;
-                else if (r.sharedMaterial != null && r.sharedMaterial.mainTexture != null)
-                    continue;
-                else if (n.Contains("stock") || n.Contains("grip") || n.Contains("pad") || n.Contains("handle"))
-                    r.sharedMaterial = polyMat;
-                else
-                    r.sharedMaterial = metalMat;
-            }
+            if(root==null) return;
+            WeaponAuthoredMaterials.Apply(root);
+            WeaponAuthoredMaterials.ApplyFinish(root);
         }
 
         void UpdateLobbyRifle()
         {
-            int curWpn = PlayerPrefs.GetInt("GeoSniper.SelectedWeapon", 1);
+            int curWpn = WeaponCatalog.SelectedOwnedWeapon;
             if (curWpn == lastLobbyWeapon && lobbyRifle != null) return;
             lastLobbyWeapon = curWpn;
 
@@ -674,9 +787,7 @@ namespace GeoSniper
             lobbyRifleMaterials.Clear();
             if (armoryRoom == null) return;
 
-            string[] riflePaths = { "Models/Weapons/Barrett50", "Models/Weapons/M24Tactical", "Models/Weapons/MK12SPR" };
-            if (curWpn < 0 || curWpn >= riflePaths.Length) curWpn = 1;
-            var prefab = Resources.Load<GameObject>(riflePaths[curWpn]);
+            var prefab = Resources.Load<GameObject>("Models/Weapons/"+WeaponCatalog.Get(curWpn).Model);
             if (prefab != null)
             {
                 // Create clean rifle holder to handle pivot alignment and positioning
@@ -760,7 +871,26 @@ namespace GeoSniper
 
         IEnumerator Play(GameLocation selected=null,bool requestDeviceLocation=false)
         {
+            // Drive nested map/elevation routines here so their exceptions reach recovery.
+            var pending=new System.Collections.Generic.Stack<System.Collections.IEnumerator>();
+            pending.Push(PlayCore(selected,requestDeviceLocation));
+            while(pending.Count>0)
+            {
+                object next=null;bool moved=false;System.Exception failure=null;
+                try { moved=pending.Peek().MoveNext();if(moved)next=pending.Peek().Current; }
+                catch(System.Exception error){failure=error;}
+                if(failure!=null){LoadingFailed(failure);yield break;}
+                if(!moved){(pending.Pop() as System.IDisposable)?.Dispose();continue;}
+                if(next is System.Collections.IEnumerator nested && !(next is CustomYieldInstruction))
+                {pending.Push(nested);yield return null;}
+                else yield return next;
+            }
+        }
+
+        IEnumerator PlayCore(GameLocation selected,bool requestDeviceLocation)
+        {
             if(!ReleaseConfiguration.Current.liveMapsEnabled) {SwitchTab(LobbyTab.Home);yield break;}
+            BeginDeploymentTracking(requestDeviceLocation?"gps":"selected");
             if (armoryRoom != null) armoryRoom.SetActive(false);
             if (sectorSun != null) sectorSun.enabled = true;
             choosingLocation=false;
@@ -788,6 +918,13 @@ namespace GeoSniper
             }
             if(location==null)
             {
+                if(stageIndexToStart>=0 && stageIndexToStart<3 && !isPvPDuel)
+                {
+                    Debug.LogWarning("[GeoSniper] GPS fix unavailable for early campaign stage, recovering with bundled sector.");
+                    StartOffline(true);
+                    yield break;
+                }
+                EndDeploymentTracking("deployment_failed","location_unavailable");
                 loading=false; ready=false; choosingLocation=true;
                 locations=locations ?? new System.Collections.Generic.List<GameLocation>();
                 locationError="No accurate GPS fix. Enable precise location and retry, or search for your place.";
@@ -815,6 +952,7 @@ namespace GeoSniper
 
             if(CanReuseSector(location))
             {
+                TrackDeployment("map_load_completed","cached_sector");
                 status="PREPARING MISSION...";
                 startupStage="PLAYER";
                 yield return ResumeLoadedSector();
@@ -823,6 +961,7 @@ namespace GeoSniper
             DiscardCachedSector();
 
             startupStage="MAP DOWNLOAD";
+            TrackDeployment("map_load_started","");
             loadingDeadline=Time.realtimeSinceStartup+SectorMap.LoadTimeoutSeconds;
             status=location.Label+"\nLOADING MAP SECTOR...";
             mapNotice="";
@@ -838,6 +977,7 @@ namespace GeoSniper
                 LoadingFailed(new System.InvalidOperationException("Map download failed: " + SectorMap.LastFailure));
                 yield break;
             }
+            TrackDeployment("map_load_completed",geographicMap?"download_or_disk_cache":"offline_fallback");
             world=new GameObject("Sector").AddComponent<SectorWorld>();
             world.SourceLabel=mapNotice;
             loadingDeadline=Time.realtimeSinceStartup+90;
@@ -852,7 +992,8 @@ namespace GeoSniper
         IEnumerator BuildSector(System.Collections.Generic.List<MapFeature> features)
         {
             startupStage="WORLD";
-            loading=true; loadingDeadline=Time.realtimeSinceStartup+120;
+            loading=true; worldLoadingStarted=Time.realtimeSinceStartup;
+            loadingDeadline=WorldLoadingBudget.Deadline(worldLoadingStarted,worldLoadingStarted);
             SectorWorld.ResetWaterLevels();
             var job=world.GenerateAsync(features,(done,total)=>{status="BUILDING SECTOR " + done + " / " + total;});
             while(true)
@@ -865,6 +1006,9 @@ namespace GeoSniper
                 bool more;
                 try { more=job.MoveNext(); }
                 catch(System.Exception error) { LoadingFailed(error); yield break; }
+                // Generation deliberately yields while finishing roads, scenery and
+                // navigation. Keep its progress alive without allowing endless loading.
+                loadingDeadline=WorldLoadingBudget.Deadline(worldLoadingStarted,Time.realtimeSinceStartup);
                 if(!more) break;
                 yield return job.Current;
             }
@@ -883,6 +1027,8 @@ namespace GeoSniper
 
         void LoadingFailed(System.Exception error)
         {
+            EndDeploymentTracking("deployment_failed",DeploymentFailureReason(error,startupStage));
+            if (pendingMultiplayerDuel) GeoSniper.Duel.SniperDuelNetwork.Instance.Disconnect("Duel map could not be prepared: " + error.Message);
             StopAllCoroutines();
             Input.location.Stop();
             Debug.LogError("Sector startup failed at " + startupStage + ": " + error);
@@ -900,15 +1046,26 @@ namespace GeoSniper
 
         void RetryDeployment()
         {
+            if (isPvPDuel && pendingMultiplayerDuel)
+            { DeployPvPDuel(pendingDuelHost, pendingDuelTarget, false, activeLocation); return; }
             if (geographicMap || activeLocation != null || LocationSelectionPolicy.RequiresLiveFix(PlayerPrefs.GetString("GeoSniper.LocationSource", "")))
                 StartPreferredLocationMission(false);
             else StartOffline(true);
         }
 
+        void DeployBundledRecovery()
+        {
+            if(pendingMultiplayerDuel)return;
+            // Replay the selected contract rather than silently switching to free practice.
+            campaignBriefingReviewed=stageIndexToStart>=0;
+            StartOffline(true);
+        }
+
         void StartOffline(bool preserveContract=false)
         {
-            bool reuse=world!=null && cachedSectorReady && cachedSectorOffline && world.SpawnPoints.Count>0;
+            bool reuse=!pendingMultiplayerDuel && world!=null && cachedSectorReady && cachedSectorOffline && world.SpawnPoints.Count>0;
             if(!preserveContract) {campaignNodeToStart=-1; stageIndexToStart=-1; isPvPDuel=false; rangeToStart=false;}
+            BeginDeploymentTracking("offline");
             if(armoryRoom!=null) armoryRoom.SetActive(false);
             loading=true;startupStage="WORLD";loadingDeadline=Time.realtimeSinceStartup+45;
             StopAllCoroutines(); Input.location.Stop();
@@ -926,7 +1083,7 @@ namespace GeoSniper
             world = new GameObject("Offline Sector").AddComponent<SectorWorld>();
             world.SourceLabel = "OFFLINE PRACTICE";
             SectorElevation.LastNotice = "Offline practice - level terrain";
-            StartCoroutine(BuildSector(SectorMap.Offline()));
+            StartCoroutine(BuildSector(preserveContract && stageIndexToStart>=0 && stageIndexToStart<3?SectorMap.Training():SectorMap.Offline()));
         }
         void Update()
         {
@@ -995,7 +1152,7 @@ namespace GeoSniper
             }
             if(lobbyMusicClip==null)
                 lobbyMusicClip=Resources.Load<AudioClip>("music/A_Single_Point") ?? Resources.Load<AudioClip>("A_Single_Point") ?? ProceduralAudio.CreateAmbientMusic();
-            lobbyMusic.volume=.42f*Mathf.Clamp01(PlayerPrefs.GetFloat("GeoSniper.MasterVolume",1f));
+            lobbyMusic.volume=(StoryNarrator.Playing(gameObject)?.1f:.42f)*Mathf.Clamp01(PlayerPrefs.GetFloat("GeoSniper.MasterVolume",1f));
             if(lobbyMusic.clip!=lobbyMusicClip) lobbyMusic.clip=lobbyMusicClip;
             if(lobbyMusicClip!=null && Application.isFocused && !lobbyMusic.isPlaying) lobbyMusic.Play();
         }
@@ -1029,8 +1186,13 @@ namespace GeoSniper
                 gameObject.AddComponent<LobbyScreenshotAutomation>();
             }
             var previous = GUI.matrix;
-            try { DrawLobbyGUI(); }
-            finally { GUI.matrix = previous; }
+            bool previousEnabled = GUI.enabled;
+            try
+            {
+                GUI.enabled = previousEnabled && !GeoSniper.Duel.SniperDuelHUD.LobbyModalOpen;
+                DrawLobbyGUI();
+            }
+            finally { GUI.matrix = previous; GUI.enabled = previousEnabled; }
         }
 
         void DrawLobbyGUI()
@@ -1038,13 +1200,26 @@ namespace GeoSniper
             if (ready) return;
             if(ReleaseConfiguration.Current.analyticsEnabled && !GameAnalyticsManager.HasConsentChoice) GameAnalyticsManager.SetAnalyticsConsent(true);
             if(showingPrivacy || showingLocationConsent) {DrawPrivacyPanel();return;}
+            if(CustomizingTouchControls)
+            {
+                Rect controlSafe = Screen.safeArea;
+                float controlScale = CommandGUI.GetCanvasScale(controlSafe, out float controlWidth, out float controlHeight);
+                GUI.matrix = Matrix4x4.TRS(new Vector3(controlSafe.x, Screen.height-controlSafe.yMax, 0),
+                    Quaternion.identity, new Vector3(controlScale,controlScale,1));
+                DrawTouchControlLayout(controlWidth,controlHeight);
+                return;
+            }
             if (choosingLocation) currentTab = LobbyTab.Location;
             if (choosingStage) currentTab = LobbyTab.Campaign;
             if (showingArmory) currentTab = LobbyTab.Armory;
             if (showingRewards) currentTab = LobbyTab.Rewards;
             if (showingSettings) currentTab = LobbyTab.Settings;
+            bool pageEnabled=GUI.enabled;
+            GUI.enabled=pageEnabled && !EconomyModalOpen;
             if (!loading && !showingModeSelector && currentTab == LobbyTab.Home) DrawMainMenu(0,0);
             else DrawCommandPages();
+            GUI.enabled=pageEnabled;
+            DrawEconomyModal();
         }
 
         void DrawModeSelectorModal(float w, float h)
@@ -1070,19 +1245,19 @@ namespace GeoSniper
                 showingModeSelector = false;
             }
 
-            int selectedMode = PlayerPrefs.GetInt("GeoSniper.SelectedMode", 0);
+            int selectedMode = Mathf.Clamp(PlayerPrefs.GetInt("GeoSniper.SelectedMode", 0), 0, 3);
 
             float cardY = panel.y + 48f;
             float cardH = 82f;
             float spacing = 8f;
 
-            string[] modeNames = { "1. CAMPAIGN (STORY GPS)", "2. REAL-WORLD GPS OPS", "3. GPS RANGE", "4. SNIPER DUEL / AI RIVAL" };
-            string[] modeBadges = { "STORY GPS", "SATELLITE", "LIVE RANGE", "1v1 GPS" };
+            string[] modeNames = { "1. CAMPAIGN", "2. REAL-WORLD GPS OPS", "3. GPS RANGE", "4. 1v1 MULTIPLAYER DUEL" };
+            string[] modeBadges = { "CAMPAIGN", "SATELLITE", "LIVE RANGE", "1v1 ONLINE" };
             string[] modeDescs = {
                 "Infiltrate urban districts across tactical contracts. Complete objectives, eliminate targets, and earn stars.",
                 "Generate real 3D OSM buildings at your live GPS coordinates or search any global city in the world.",
                 "Train with realistic ballistics, zeroing, wind adjustment, and moving targets in your live sector.",
-                "High-stakes rooftop duel against a rival sniper marksman. Locate and neutralize before they spot you."
+                "Host a room or join a friend's code. Both players fight on the host's chosen map. Solo practice is available inside."
             };
 
             for (int i = 0; i < 4; i++)
@@ -1096,431 +1271,17 @@ namespace GeoSniper
                 GUI.Label(new Rect(r.x + 14, r.y + 30, r.width - 170, 44), modeDescs[i], new GUIStyle(GUI.skin.label) { fontSize = 10, wordWrap = true, normal = { textColor = CommandGUI.Muted } });
 
                 Rect actionBtn = new Rect(r.xMax - 130, r.y + 22, 116, 38);
-                if (isCur)
+                string action = i == 0 ? "OPEN CAMPAIGN" : i == 3 ? "OPEN 1v1 ROOM" : isCur ? "USE MODE" : "SELECT";
+                if (CommandGUI.DrawButton(actionBtn, action, isCur, 11) || CommandGUI.IsClicked(r))
                 {
-                    CommandGUI.DrawBadge(actionBtn, " ACTIVE MODE", CommandGUI.AccentGold, 11);
-                }
-                else
-                {
-                    if (CommandGUI.DrawButton(actionBtn, "SELECT", true, 12) || CommandGUI.IsClicked(r))
-                    {
-                        PlayerPrefs.SetInt("GeoSniper.SelectedMode", i);
-                        PlayerPrefs.Save();
-                        showingModeSelector = false;
-                    }
+                    SelectLobbyMode(i);
                 }
             }
         }
 
-        void DrawRewardsModal(float w, float h)
-        {
-            CommandGUI.DrawPanel(new Rect(0, 0, w, h), CommandGUI.ThemeCard, Color.clear, 0);
+        void DrawRewardsModal(float w, float h) => DrawEconomyPage(w,h,false);
 
-            float pW = Mathf.Min(520f, w - 24f);
-            float pH = Mathf.Min(540f, h - 65f);
-            Rect panel = new Rect((w - pW) / 2f, 10f, pW, pH);
-            CommandGUI.DrawPanel(panel, CommandGUI.ThemeCard, CommandGUI.AccentGold, 2f);
-
-            var titleStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 17,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleLeft,
-                normal = { textColor = CommandGUI.AccentGold }
-            };
-            GUI.Label(new Rect(panel.x + 18, panel.y + 12, 320, 26), "TACTICAL REWARDS & VAULT", titleStyle);
-
-            if (CommandGUI.DrawButton(new Rect(panel.xMax - 95, panel.y + 10, 80, 34), " CLOSE", false, 12))
-            {
-                SwitchTab(LobbyTab.Home);
-            }
-
-            int credits = PlayerPrefs.GetInt("GeoSniper.Credits", 0);
-            int gold = PlayerPrefs.GetInt("GeoSniper.Gold", 0);
-            int bountyStash = PlayerPrefs.GetInt("GeoSniper.BountyStash", 0);
-            string todayStr = System.DateTime.UtcNow.ToString("yyyyMMdd");
-            bool airdropReady = PlayerPrefs.GetString("GeoSniper.LastAirdropDate", "") != todayStr;
-            int adClaimsToday = PlayerPrefs.GetString("GeoSniper.LastRewardAdDate", "") == todayStr ? PlayerPrefs.GetInt("GeoSniper.RewardAdsToday", 0) : 0;
-            bool rewardAdReady = adClaimsToday < 3;
-
-            // 1. BOUNTY VAULT CARD
-            Rect vaultCard = new Rect(panel.x + 16, panel.y + 46, panel.width - 32, 88);
-            CommandGUI.DrawPanel(vaultCard, CommandGUI.ThemeCard, CommandGUI.AccentGold, 1.2f);
-            CommandGUI.DrawBadge(new Rect(vaultCard.x + 12, vaultCard.y + 8, 106, 16), "HEADSHOT VAULT", CommandGUI.AccentGold, 9);
-            GUI.Label(new Rect(vaultCard.x + 12, vaultCard.y + 26, 220, 22), "$" + bountyStash.ToString("N0"), new GUIStyle(GUI.skin.label) { fontSize = 17, fontStyle = FontStyle.Bold, normal = { textColor = CommandGUI.AccentGold } });
-            GUI.Label(new Rect(vaultCard.x + 12, vaultCard.y + 50, vaultCard.width - 150, 34), "Earned from precision headshots in combat missions. Tap claim to deposit into bank.", new GUIStyle(GUI.skin.label) { fontSize = 10, wordWrap = true, normal = { textColor = Color.white } });
-
-            Rect claimVaultBtn = new Rect(vaultCard.xMax - 130, vaultCard.y + 24, 116, 40);
-            bool canClaimVault = bountyStash > 0;
-            if (CommandGUI.DrawButton(claimVaultBtn, canClaimVault ? "CLAIM CASH" : "EMPTY", canClaimVault, 11))
-            {
-                if (canClaimVault)
-                {
-                    PlayerPrefs.SetInt("GeoSniper.Credits", credits + bountyStash);
-                    PlayerPrefs.SetInt("GeoSniper.BountyStash", 0);
-                    PlayerPrefs.Save();
-                }
-            }
-
-            // 2. DAILY SUPPLY DROP CARD
-            Rect dropCard = new Rect(panel.x + 16, panel.y + 140, panel.width - 32, 88);
-            CommandGUI.DrawPanel(dropCard, CommandGUI.ThemeCard, CommandGUI.AccentCyan, 1.2f);
-            CommandGUI.DrawBadge(new Rect(dropCard.x + 12, dropCard.y + 8, 116, 16), "DAILY SUPPLY DROP", CommandGUI.AccentCyan, 9);
-            GUI.Label(new Rect(dropCard.x + 12, dropCard.y + 26, 220, 22), "+100 GOLD ", new GUIStyle(GUI.skin.label) { fontSize = 17, fontStyle = FontStyle.Bold, normal = { textColor = CommandGUI.AccentCyan } });
-            GUI.Label(new Rect(dropCard.x + 12, dropCard.y + 50, dropCard.width - 150, 34), "Airdropped daily tactical provisions. Resets every 24 hours.", new GUIStyle(GUI.skin.label) { fontSize = 10, wordWrap = true, normal = { textColor = Color.white } });
-
-            Rect claimDropBtn = new Rect(dropCard.xMax - 130, dropCard.y + 24, 116, 40);
-            if (airdropReady)
-            {
-                if (CommandGUI.DrawGreenPlayButton(claimDropBtn, "CLAIM 100 "))
-                {
-                    PlayerPrefs.SetInt("GeoSniper.Gold", gold + 100);
-                    PlayerPrefs.SetString("GeoSniper.LastAirdropDate", todayStr);
-                    PlayerPrefs.Save();
-                }
-            }
-            else
-            {
-                CommandGUI.DrawBadge(claimDropBtn, "CLAIMED TODAY ", new Color(0.4f, 0.6f, 0.4f), 10);
-            }
-
-            // 3. SPONSORED TACTICAL AIRDROP CARD (Rewarded Ad)
-            Rect adCard = new Rect(panel.x + 16, panel.y + 234, panel.width - 32, 88);
-            CommandGUI.DrawPanel(adCard, CommandGUI.ThemeCard, new Color(0.85f, 0.45f, 1.0f), 1.2f);
-            CommandGUI.DrawBadge(new Rect(adCard.x + 12, adCard.y + 8, 140, 16), " SPONSORED DROP", new Color(0.85f, 0.45f, 1.0f), 9);
-            GUI.Label(new Rect(adCard.x + 12, adCard.y + 26, 220, 22), "+$1,500 VAULT CASH ", new GUIStyle(GUI.skin.label) { fontSize = 17, fontStyle = FontStyle.Bold, normal = { textColor = CommandGUI.AccentGold } });
-            GUI.Label(new Rect(adCard.x + 12, adCard.y + 50, adCard.width - 150, 34), rewardAdReady ? "Watch a sponsor transmission to claim +$1,500 cash. 3 claims per day." : "Daily sponsored cash limit reached. Return tomorrow.", new GUIStyle(GUI.skin.label) { fontSize = 10, wordWrap = true, normal = { textColor = Color.white } });
-
-            Rect watchAdBtn = new Rect(adCard.xMax - 130, adCard.y + 24, 116, 40);
-            if (rewardAdReady && CommandGUI.DrawButton(watchAdBtn, " WATCH AD", true, 11))
-            {
-                AdManager.Instance.ShowRewardedAd((success) =>
-                {
-                    if (success)
-                    {
-                        int count=PlayerPrefs.GetString("GeoSniper.LastRewardAdDate", "") == todayStr ? PlayerPrefs.GetInt("GeoSniper.RewardAdsToday", 0) : 0;
-                        if(count>=3) return;
-                        PlayerPrefs.SetInt("GeoSniper.Credits", PlayerPrefs.GetInt("GeoSniper.Credits", 0) + 1500);
-                        PlayerPrefs.SetString("GeoSniper.LastRewardAdDate", todayStr);
-                        PlayerPrefs.SetInt("GeoSniper.RewardAdsToday", count+1);
-                        PlayerPrefs.Save();
-                    }
-                }, "lobby_vault_sponsor");
-            }
-            else if(!rewardAdReady) CommandGUI.DrawBadge(watchAdBtn,"LIMIT REACHED",CommandGUI.Muted,10);
-
-            // 4. GOOGLE PLAY STORE REVIEW & RATING CARD
-            Rect rateCard = new Rect(panel.x + 16, panel.y + 328, panel.width - 32, 88);
-            CommandGUI.DrawPanel(rateCard, CommandGUI.ThemeCard, CommandGUI.AccentGold, 1.2f);
-            CommandGUI.DrawBadge(new Rect(rateCard.x + 12, rateCard.y + 8, 150, 16), "GOOGLE PLAY REVIEW", CommandGUI.AccentGold, 9);
-            GUI.Label(new Rect(rateCard.x + 12, rateCard.y + 26, 220, 22), "SHARE YOUR FEEDBACK", new GUIStyle(GUI.skin.label) { fontSize = 17, fontStyle = FontStyle.Bold, normal = { textColor = CommandGUI.AccentGold } });
-            GUI.Label(new Rect(rateCard.x + 12, rateCard.y + 50, rateCard.width - 150, 34), "Leave an honest review on Google Play. Reviews are optional and never affect rewards.", new GUIStyle(GUI.skin.label) { fontSize = 10, wordWrap = true, normal = { textColor = Color.white } });
-
-            Rect rateBtn = new Rect(rateCard.xMax - 130, rateCard.y + 24, 116, 40);
-            if (CommandGUI.DrawButton(rateBtn,"REVIEW",false,11))
-            {
-                AdManager.OpenPlayStoreRating();
-            }
-
-            if (CommandGUI.DrawButton(new Rect(panel.x + (panel.width - 180) / 2f, panel.yMax - 46, 180, 36), "BACK TO LOBBY", false, 12))
-            {
-                SwitchTab(LobbyTab.Home);
-            }
-
-            string[] tabIcons = { "", "", "", "", "" };
-            string[] tabTitles = { "HOME", "CAMPAIGN", "ARMORY", "SECTOR", "VAULT" };
-            int rTab = CommandGUI.DrawTabBar(new Rect(0, h - 56f, w, 56f), tabIcons, tabTitles, 4);
-            if (rTab != 4) SwitchTab((LobbyTab)rTab);
-        }
-
-        void DrawArmoryModal(float w, float h)
-        {
-            EnsureLobbyTextures();
-            CommandGUI.DrawPanel(new Rect(0, 0, w, h), CommandGUI.ThemeCard, Color.clear, 0);
-
-            float pW = Mathf.Min(820f, w - 24f);
-            float pH = Mathf.Min(560f, h - 70f);
-            Rect panel = new Rect((w - pW) / 2f, 10f, pW, pH);
-            CommandGUI.DrawPanel(panel, CommandGUI.ThemeCard, CommandGUI.AccentCyan, 2f);
-
-            int credits = PlayerPrefs.GetInt("GeoSniper.Credits", 0);
-            int gold = PlayerPrefs.GetInt("GeoSniper.Gold", 0);
-
-            // Title Header
-            var titleStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 17,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleLeft,
-                normal = { textColor = CommandGUI.AccentCyan }
-            };
-            GUI.Label(new Rect(panel.x + 18, panel.y + 12, 340, 26), "ARMORY / WEAPON UPGRADES", titleStyle);
-            if (IsDebugMode)
-            {
-                CommandGUI.DrawBadge(new Rect(panel.x + 315, panel.y + 15, 150, 20), "DEBUG: ALL GUNS OPEN", CommandGUI.AccentGreen, 9);
-            }
-
-            // Header live balances
-            Rect cashHeaderRect = new Rect(panel.xMax - 260, panel.y + 10, 110, 30);
-            CommandGUI.DrawDarkPill(cashHeaderRect, "$", credits.ToString("N0"), CommandGUI.AccentGold);
-            Rect goldHeaderRect = new Rect(panel.xMax - 144, panel.y + 10, 94, 30);
-            CommandGUI.DrawDarkPill(goldHeaderRect, "◆", gold.ToString(), CommandGUI.AccentGold);
-
-            // Close button
-            if (CommandGUI.DrawButton(new Rect(panel.xMax - 48, panel.y + 8, 38, 34), "X", false, 14))
-            {
-                SwitchTab(LobbyTab.Home);
-            }
-
-            // Initialize default ownership if first run
-            if (!PlayerPrefs.HasKey("GeoSniper.WeaponUnlocked_1"))
-            {
-                PlayerPrefs.SetInt("GeoSniper.WeaponUnlocked_1", 1); // M24 free starter
-                PlayerPrefs.SetInt("GeoSniper.WeaponUnlocked_0", 0); // Barrett costs gold
-                PlayerPrefs.SetInt("GeoSniper.WeaponUnlocked_2", 0); // MK12 costs cash
-                if (PlayerPrefs.GetInt("GeoSniper.SelectedWeapon", 0) == 0 && PlayerPrefs.GetInt("GeoSniper.WeaponUnlocked_0", 0) == 0 && !IsDebugMode)
-                {
-                    PlayerPrefs.SetInt("GeoSniper.SelectedWeapon", 1);
-                }
-                PlayerPrefs.Save();
-            }
-
-            int selectedWeapon = PlayerPrefs.GetInt("GeoSniper.SelectedWeapon", 1);
-
-            string[] names = { "BARRETT .50 CAL", "M24 TACTICAL SWS", "MK12 SPR DMR" };
-            string[] classes = { "HEAVY ANTI-MATERIEL", "PRECISION BOLT-ACTION", "RAPID MARKSMAN" };
-            float[] baseDamages = { 120f, 85f, 45f };
-            int[] baseMags = { 5, 20, 30 };
-            string[][] scopeLabels = new string[][] {
-                new string[] { "10x MIL-DOT", "16x ULTRA", "24x EXTREME" },
-                new string[] { "6x TACTICAL", "12x PRECISION", "18x HIGH-POWER" },
-                new string[] { "4x RAPID", "8x RECON", "12x MARCO" }
-            };
-            Texture2D[] gunTextures = { barrettCardTex, m24CardTex, mk12CardTex };
-
-            float cardY = panel.y + 48f;
-            float cardH = 146f;
-            float spacing = 8f;
-
-            for (int i = 0; i < 3; i++)
-            {
-                bool isUnlocked = IsDebugMode || PlayerPrefs.GetInt("GeoSniper.WeaponUnlocked_" + i, i == 1 ? 1 : 0) == 1;
-                bool isEq = isUnlocked && selectedWeapon == i;
-
-                Rect r = new Rect(panel.x + 14, cardY + i * (cardH + spacing), panel.width - 28, cardH);
-                CommandGUI.DrawPanel(r, CommandGUI.ThemeCard, isEq ? CommandGUI.AccentGold : isUnlocked ? CommandGUI.ThemeBorder : CommandGUI.ThemeCard, isEq ? 2f : 1f);
-
-                // --- LEFT: HIGH-RES WEAPON CARD VISUAL ---
-                Rect imgRect = new Rect(r.x + 8, r.y + 8, 205, 130);
-                CommandGUI.DrawPanel(imgRect, Color.black, CommandGUI.ThemeBorder, 1f);
-                if (gunTextures[i] != null)
-                {
-                    GUI.DrawTexture(imgRect, gunTextures[i], ScaleMode.ScaleAndCrop);
-                }
-                else if (weaponCardTex != null)
-                {
-                    GUI.DrawTexture(imgRect, weaponCardTex, ScaleMode.ScaleAndCrop);
-                }
-
-                // --- CENTER: STATS & UPGRADES ---
-                float statX = r.x + 222f;
-
-                // Name & Class Tag
-                Color nameCol = isEq ? CommandGUI.AccentGold : isUnlocked ? Color.white : CommandGUI.Muted;
-                GUI.Label(new Rect(statX, r.y + 6, 200, 20), names[i], new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, normal = { textColor = nameCol } });
-                CommandGUI.DrawBadge(new Rect(statX + 205, r.y + 6, 120, 18), classes[i], isUnlocked ? CommandGUI.AccentCyan : new Color(0.85f, 0.45f, 0.45f), 9);
-
-                int dmgLvl = PlayerPrefs.GetInt("GeoSniper.WpnDmgLvl_" + i, 0);
-                int scopeLvl = PlayerPrefs.GetInt("GeoSniper.WpnScopeLvl_" + i, 0);
-                int magLvl = PlayerPrefs.GetInt("GeoSniper.WpnMagLvl_" + i, 0);
-
-                float curDmg = baseDamages[i] * (1f + dmgLvl * 0.20f);
-                int curMag = baseMags[i] + magLvl * (i == 0 ? 2 : 5);
-                string curScope = scopeLabels[i][Mathf.Clamp(scopeLvl, 0, 2)];
-
-                // 1. GUN POWER (DAMAGE)
-                float row1Y = r.y + 32f;
-                Rect pwrPips = new Rect(statX, row1Y + 3, 52, 10);
-                CommandGUI.DrawPipRating(pwrPips, dmgLvl + 1, 3, CommandGUI.AccentGold);
-                GUI.Label(new Rect(statX + 58, row1Y, 170, 18), $"POWER: {curDmg:0} DMG (LV {dmgLvl + 1}/3)", new GUIStyle(GUI.skin.label) { fontSize = 10, fontStyle = FontStyle.Bold, normal = { textColor = CommandGUI.AccentGold } });
-                if (isUnlocked)
-                {
-                    Rect dmgBtn = new Rect(statX + 235, row1Y - 4, 118, 28);
-                    if (dmgLvl >= 2)
-                    {
-                        CommandGUI.DrawBadge(dmgBtn, "MAX POWER", CommandGUI.AccentGold, 10);
-                    }
-                    else
-                    {
-                        int dmgCost = (dmgLvl + 1) * 1500;
-                        bool canAfford = credits >= dmgCost;
-                        if (CommandGUI.DrawButton(dmgBtn, $" +20% (${dmgCost:N0})", canAfford, 10))
-                        {
-                            if (canAfford)
-                            {
-                                PlayerPrefs.SetInt("GeoSniper.Credits", credits - dmgCost);
-                                PlayerPrefs.SetInt("GeoSniper.WpnDmgLvl_" + i, dmgLvl + 1);
-                                PlayerPrefs.Save();
-                                GameAnalyticsManager.TrackWeaponUpgrade(i, "Damage", dmgLvl + 1, dmgCost);
-                            }
-                            else OpenEconomyRewardOffer("cash",dmgCost-credits);
-                        }
-                    }
-                }
-
-                // 2. OPTIC SCOPE ZOOM
-                float row2Y = r.y + 64f;
-                Rect scpPips = new Rect(statX, row2Y + 3, 52, 10);
-                CommandGUI.DrawPipRating(scpPips, scopeLvl + 1, 3, CommandGUI.AccentCyan);
-                GUI.Label(new Rect(statX + 58, row2Y, 170, 18), $"SCOPE: {curScope} (LV {scopeLvl + 1}/3)", new GUIStyle(GUI.skin.label) { fontSize = 10, fontStyle = FontStyle.Bold, normal = { textColor = CommandGUI.AccentCyan } });
-                if (isUnlocked)
-                {
-                    Rect scpBtn = new Rect(statX + 235, row2Y - 4, 118, 28);
-                    if (scopeLvl >= 2)
-                    {
-                        CommandGUI.DrawBadge(scpBtn, "MAX SCOPE", CommandGUI.AccentCyan, 10);
-                    }
-                    else
-                    {
-                        int scpCost = (scopeLvl + 1) * 1200;
-                        bool canAfford = credits >= scpCost;
-                        if (CommandGUI.DrawButton(scpBtn, $" ZOOM (${scpCost:N0})", canAfford, 10))
-                        {
-                            if (canAfford)
-                            {
-                                PlayerPrefs.SetInt("GeoSniper.Credits", credits - scpCost);
-                                PlayerPrefs.SetInt("GeoSniper.WpnScopeLvl_" + i, scopeLvl + 1);
-                                PlayerPrefs.Save();
-                                GameAnalyticsManager.TrackWeaponUpgrade(i, "Scope", scopeLvl + 1, scpCost);
-                            }
-                            else OpenEconomyRewardOffer("cash",scpCost-credits);
-                        }
-                    }
-                }
-
-                // 3. MAG CAPACITY
-                float row3Y = r.y + 96f;
-                Rect magPips = new Rect(statX, row3Y + 3, 52, 10);
-                CommandGUI.DrawPipRating(magPips, magLvl + 1, 3, CommandGUI.AccentGold);
-                GUI.Label(new Rect(statX + 58, row3Y, 170, 18), $"MAG: {curMag} RDS (LV {magLvl + 1}/3)", new GUIStyle(GUI.skin.label) { fontSize = 10, fontStyle = FontStyle.Bold, normal = { textColor = CommandGUI.AccentGold } });
-                if (isUnlocked)
-                {
-                    Rect magBtn = new Rect(statX + 235, row3Y - 4, 118, 28);
-                    if (magLvl >= 2)
-                    {
-                        CommandGUI.DrawBadge(magBtn, "MAX MAG", CommandGUI.AccentGold, 10);
-                    }
-                    else
-                    {
-                        int magCost = (magLvl + 1) * 1000;
-                        bool canAfford = credits >= magCost;
-                        if (CommandGUI.DrawButton(magBtn, $" +MAG (${magCost:N0})", canAfford, 10))
-                        {
-                            if (canAfford)
-                            {
-                                PlayerPrefs.SetInt("GeoSniper.Credits", credits - magCost);
-                                PlayerPrefs.SetInt("GeoSniper.WpnMagLvl_" + i, magLvl + 1);
-                                PlayerPrefs.Save();
-                                GameAnalyticsManager.TrackWeaponUpgrade(i, "Magazine", magLvl + 1, magCost);
-                            }
-                            else OpenEconomyRewardOffer("cash",magCost-credits);
-                        }
-                    }
-                }
-
-                // --- RIGHT: EQUIP / UNLOCK ACTION ---
-                if (isUnlocked)
-                {
-                    Rect eqBtn = new Rect(r.xMax - 144, r.y + 44, 132, 52);
-                    if (isEq)
-                    {
-                        CommandGUI.DrawBadge(eqBtn, " EQUIPPED", CommandGUI.AccentGold, 13);
-                    }
-                    else
-                    {
-                        if (CommandGUI.DrawButton(eqBtn, "EQUIP RIFLE", true, 12))
-                        {
-                            PlayerPrefs.SetInt("GeoSniper.SelectedWeapon", i);
-                            PlayerPrefs.Save();
-                        }
-                    }
-                }
-                else
-                {
-                    if (i == 0) // Barrett .50 Cal costs 150 Gold
-                    {
-                        Rect buyGoldBtn = new Rect(r.xMax - 144, r.y + 42, 132, 54);
-                        bool canAffordGold = gold >= 150;
-                        if (CommandGUI.DrawGoldStoreButton(buyGoldBtn, canAffordGold ? "UNLOCK\n300 GOLD" : "NEED\n300 GOLD"))
-                        {
-                            if (canAffordGold)
-                            {
-                                PlayerPrefs.SetInt("GeoSniper.Gold", gold - 300);
-                                PlayerPrefs.SetInt("GeoSniper.WeaponUnlocked_0", 1);
-                                PlayerPrefs.SetInt("GeoSniper.SelectedWeapon", 0);
-                                PlayerPrefs.Save();
-                            }
-                            else OpenEconomyRewardOffer("gold",300-gold);
-                        }
-                    }
-                    else if (i == 2) // MK12 SPR DMR costs $2,500 Cash
-                    {
-                        Rect buyCashBtn = new Rect(r.xMax - 144, r.y + 42, 132, 54);
-                        bool canAffordCash = credits >= 7500;
-                        if (CommandGUI.DrawGreenPlayButton(buyCashBtn, canAffordCash ? "BUY\n$7,500 " : "NEED\n$7,500 "))
-                        {
-                            if (canAffordCash)
-                            {
-                                PlayerPrefs.SetInt("GeoSniper.Credits", credits - 7500);
-                                PlayerPrefs.SetInt("GeoSniper.WeaponUnlocked_2", 1);
-                                PlayerPrefs.SetInt("GeoSniper.SelectedWeapon", 2);
-                                PlayerPrefs.Save();
-                            }
-                            else OpenEconomyRewardOffer("cash",7500-credits);
-                        }
-                    }
-                }
-            }
-
-            if(economyRewardOffer) DrawEconomyRewardOffer(w,h);
-
-            // Bottom Return Button
-            if (CommandGUI.DrawButton(new Rect(panel.x + (panel.width - 180) / 2f, panel.yMax - 44, 180, 36), "BACK TO LOBBY", false, 12))
-            {
-                SwitchTab(LobbyTab.Home);
-            }
-
-            string[] tabIcons = { "", "", "", "", "" };
-            string[] tabTitles = { "HOME", "CAMPAIGN", "ARMORY", "SECTOR", "VAULT" };
-            int aTab = CommandGUI.DrawTabBar(new Rect(0, h - 56f, w, 56f), tabIcons, tabTitles, 2);
-            if (aTab != 2) SwitchTab((LobbyTab)aTab);
-        }
-
-        void OpenEconomyRewardOffer(string type,int shortfall)
-        {
-            economyRewardType=type;
-            economyRewardAmount=type=="gold"?50:1500;
-            economyNotice="You are short by "+shortfall.ToString("N0")+" "+(type=="gold"?"GOLD":"CASH")+". Watch an ad to earn currency; the purchase still requires a second confirmation.";
-            economyRewardOffer=true;
-        }
-
-        void DrawEconomyRewardOffer(float w,float h)
-        {
-            GUI.color=new Color(.01f,.015f,.02f,.82f);GUI.DrawTexture(new Rect(0,0,w,h),Texture2D.whiteTexture);GUI.color=Color.white;
-            float pw=Mathf.Min(480f,w-32f),ph=190f;Rect p=new Rect((w-pw)/2f,(h-ph)/2f,pw,ph);
-            CommandGUI.DrawPanel(p,CommandGUI.ThemeCard,CommandGUI.AccentGold,2f);
-            GUI.Label(new Rect(p.x+20,p.y+18,p.width-40,28),"INSUFFICIENT FUNDS",new GUIStyle(GUI.skin.label){fontSize=18,fontStyle=FontStyle.Bold,alignment=TextAnchor.MiddleCenter,normal={textColor=CommandGUI.AccentGold}});
-            GUI.Label(new Rect(p.x+28,p.y+54,p.width-56,48),economyNotice,new GUIStyle(GUI.skin.label){fontSize=11,wordWrap=true,alignment=TextAnchor.MiddleCenter,normal={textColor=Color.white}});
-            if(CommandGUI.DrawButton(new Rect(p.x+24,p.y+120,p.width/2-32,42),"WATCH AD",true,12))
-            {
-                economyRewardOffer=false;
-                string type=economyRewardType;int amount=economyRewardAmount;string day=System.DateTime.UtcNow.ToString("yyyyMMdd");
-                int count=PlayerPrefs.GetString("GeoSniper.LastRewardAdDate","")==day?PlayerPrefs.GetInt("GeoSniper.RewardAdsToday",0):0;
-                if(count<3) AdManager.Instance.ShowRewardedAd(success=>{if(success){if(type=="gold")PlayerPrefs.SetInt("GeoSniper.Gold",PlayerPrefs.GetInt("GeoSniper.Gold",0)+amount);else PlayerPrefs.SetInt("GeoSniper.Credits",PlayerPrefs.GetInt("GeoSniper.Credits",0)+amount);PlayerPrefs.SetString("GeoSniper.LastRewardAdDate",day);PlayerPrefs.SetInt("GeoSniper.RewardAdsToday",count+1);PlayerPrefs.Save();}},"armory_shortfall");
-                else economyNotice="Daily rewarded-ad limit reached.";
-            }
-            if(CommandGUI.DrawButton(new Rect(p.x+p.width/2+8,p.y+120,p.width/2-32,42),"CANCEL",false,12)) economyRewardOffer=false;
-        }
+        void DrawArmoryModal(float w, float h) => DrawEconomyPage(w,h,true);
 
         void DrawSettingsModal(float w, float h)
         {
@@ -1529,7 +1290,7 @@ namespace GeoSniper
             CommandGUI.DrawPanel(new Rect(0, 0, w, h), CommandGUI.ThemeCard, Color.clear, 0);
 
             float pW = Mathf.Min(480f, w - 40f);
-            float pH = Mathf.Min(535f, h - 30f);
+            float pH = Mathf.Min(580f, h - 20f);
             Rect panel = new Rect((w - pW) / 2f, (h - pH) / 2f, pW, pH);
             CommandGUI.DrawPanel(panel, CommandGUI.ThemeCard, CommandGUI.AccentCyan, 2f);
 
@@ -1593,6 +1354,11 @@ namespace GeoSniper
             if(CommandGUI.DrawButton(new Rect(panel.x+30,panel.y+416,panel.width-60,48),"GRAPHICS & PERFORMANCE",false,14))
                 showingGraphicsSettings=true;
 
+            if(CommandGUI.DrawButton(new Rect(panel.x+30,panel.y+474,panel.width-60,32),
+                CombatHudPreferences.TacticalDetails ? "COMBAT HUD: DETAILED" : "COMBAT HUD: CLEAN",
+                CombatHudPreferences.TacticalDetails,12))
+                CombatHudPreferences.TacticalDetails=!CombatHudPreferences.TacticalDetails;
+
             if (CommandGUI.DrawButton(new Rect(panel.x + (panel.width - 160) / 2f, panel.yMax - 50, 160, 38), "SAVE & CLOSE", true, 13))
             {
                 PlayerPrefs.Save();
@@ -1636,23 +1402,28 @@ namespace GeoSniper
             };
             GUI.Label(new Rect(centerPanel.x + 30, centerPanel.y + 95, centerPanel.width - 60, 50), status, statusStyle);
 
-            // Animated Progress bar
-            float progress = Mathf.PingPong(Time.realtimeSinceStartup * 0.4f, 0.9f) + 0.1f;
+            // Stage indicator; reflects preparation steps rather than download percentage.
+            float progress = 0.1f;
             if (startupStage == "MAP DOWNLOAD") progress = 0.35f;
             else if (startupStage == "WORLD") progress = 0.75f;
             else if (startupStage == "PLAYER") progress = 0.95f;
 
             CommandGUI.DrawProgressBar(new Rect(centerPanel.x + 30, centerPanel.y + 155, centerPanel.width - 60, 20), progress, CommandGUI.AccentCyan, CommandGUI.ThemeCard);
 
-            if (mapNotice != "")
+            GUI.Label(new Rect(centerPanel.x+30,centerPanel.y+180,centerPanel.width-60,24),startupStage+(deploymentTracked?" / "+Mathf.FloorToInt(Time.realtimeSinceStartup-deploymentStartedAt)+"s elapsed":""),statusStyle);
+            if (CommandGUI.DrawButton(new Rect(centerPanel.x + 90, centerPanel.yMax - 55, centerPanel.width - 180, 40), pendingMultiplayerDuel ? "CANCEL DUEL & RETURN" : "SWITCH TO OFFLINE OPS", false, 13))
             {
-                var noticeStyle = new GUIStyle(GUI.skin.label) { fontSize = 11, alignment = TextAnchor.MiddleCenter, normal = { textColor = CommandGUI.Muted } };
-                GUI.Label(new Rect(centerPanel.x + 30, centerPanel.y + 182, centerPanel.width - 60, 24), mapNotice, noticeStyle);
-            }
-
-            if (CommandGUI.DrawButton(new Rect(centerPanel.x + 90, centerPanel.yMax - 55, centerPanel.width - 180, 40), "SWITCH TO OFFLINE OPS", false, 13))
-            {
-                StartOffline(true);
+                if (pendingMultiplayerDuel)
+                {
+                    StopAllCoroutines(); Input.location.Stop();
+                    GeoSniper.Duel.SniperDuelNetwork.Instance.Disconnect("Duel loading cancelled.");
+                    pendingMultiplayerDuel = false; isPvPDuel = false; duelLocationSelection = false;
+                    loading = ready = false;
+                    DiscardCachedSector();
+                    SwitchTab(LobbyTab.Home);
+                    GeoSniper.Duel.SniperDuelHUD.Instance.ShowLobbyModal = true;
+                }
+                else StartOffline(true);
             }
         }
 
@@ -1672,6 +1443,9 @@ namespace GeoSniper
         public void ReturnToLobby(int justCompletedNodeId = -1) => ReturnToLevelMap(justCompletedNodeId);
         public void ReturnToLevelMap(int justCompletedNodeId = -1)
         {
+            ClearDuelDeploymentIntent();
+            if (mission != null && mission.MultiplayerDuel)
+            { activeLocation = null; cachedSectorReady = false; }
             if (mission != null)
             {
                 mission.enabled = false;
@@ -1722,6 +1496,7 @@ namespace GeoSniper
             }
             if (targetNode < 0) targetNode = GetDefaultSelectedNodeId();
             selectedNodeId = targetNode;
+            if(currentTab==LobbyTab.Campaign)PlayBriefingAudio(selectedNodeId,true);
 
             var selNode = CampaignNodeGraph.GetNode(selectedNodeId);
             if (selNode != null)
@@ -1736,125 +1511,45 @@ namespace GeoSniper
         {
             DrawCampaignScreen(w, h);
         }
-        void DrawLocationPicker(float w, float h)
+        void DrawLocationPicker(float w,float h)
         {
-            CommandGUI.DrawPanel(new Rect(0, 0, w, h), CommandGUI.ThemeCard, Color.clear, 0);
-
-            float panelW = Mathf.Min(900, w - 40);
-            float panelH = h - 74;
-            Rect panel = new Rect((w - panelW) / 2f, 10, panelW, panelH);
-            CommandGUI.DrawPanel(panel, CommandGUI.ThemeCard, CommandGUI.ThemeBorder, 2f);
-
-            var titleStyle = new GUIStyle(GUI.skin.label)
+            float width=Mathf.Min(880,w-40);var panel=new Rect((w-width)/2,18,width,h-38);
+            CommandGUI.Fill(panel,CommandGUI.ThemeCard);
+            var body=new GUIStyle(GUI.skin.label){fontSize=16,wordWrap=true,normal={textColor=CommandGUI.Text}};
+            var small=new GUIStyle(body){fontSize=13,normal={textColor=CommandGUI.Muted}};
+            GUI.Label(new Rect(panel.x+24,panel.y+20,width-190,38),duelLocationSelection?"DUEL LOCATION":"CHOOSE A LOCATION",new GUIStyle(body){fontSize=23,fontStyle=FontStyle.Bold});
+            if(CommandGUI.DrawButton(new Rect(panel.xMax-134,panel.y+18,110,36),"BACK",false,13))
             {
-                fontSize = 20,
-                fontStyle = FontStyle.Bold,
-                normal = { textColor = CommandGUI.AccentCyan }
-            };
-            GUI.Label(new Rect(panel.x + 20, panel.y + 18, 420, 30), "WHERE DO YOU WANT TO PLAY?", titleStyle);
-
-            if (CommandGUI.DrawButton(new Rect(panel.xMax - 110, panel.y + 15, 95, 36), " LOBBY", false, 14))
-            {
-                SwitchTab(LobbyTab.Home);
+                if(campaignLocationEdit){campaignLocationEdit=false;SwitchTab(LobbyTab.Campaign);}
+                else {SwitchTab(LobbyTab.Home);if(duelLocationSelection){duelLocationSelection=false;GeoSniper.Duel.SniperDuelHUD.Instance.ShowLobbyModal=true;}}
             }
-
-            bool livePreferred=LocationSelectionPolicy.RequiresLiveFix(PlayerPrefs.GetString("GeoSniper.LocationSource",""));
-            string savedPlace=activeLocation!=null?activeLocation.Label:PlayerPrefs.GetString("GeoSniper.SavedLabel","");
-            var bodyStyle=new GUIStyle(GUI.skin.label) {fontSize=15,wordWrap=true,normal={textColor=CommandGUI.Text}};
-            var smallStyle=new GUIStyle(bodyStyle) {fontSize=13,normal={textColor=CommandGUI.Muted}};
-            string sourceSummary=livePreferred?"SELECTED SOURCE: LIVE GPS - refreshed when you deploy"
-                :string.IsNullOrWhiteSpace(savedPlace)?"NO LOCATION SELECTED - choose an option below"
-                :"SELECTED SOURCE: CHOSEN PLACE - not your live GPS";
-            GUI.Label(new Rect(panel.x+20,panel.y+56,panel.width-40,26),sourceSummary,bodyStyle);
-            string detail=livePreferred?"Saved map data and your location source are separate. GPS determines where you play."
-                :string.IsNullOrWhiteSpace(savedPlace)?"Play around you, or search another neighbourhood."
-                :"Place: "+savedPlace;
-            GUI.Label(new Rect(panel.x+20,panel.y+84,panel.width-40,38),detail,smallStyle);
-
-            float cardWidth=(panel.width-52)/2;
-            var gpsCard=new Rect(panel.x+20,panel.y+132,cardWidth,158);
-            var searchCard=new Rect(gpsCard.xMax+12,gpsCard.y,cardWidth,158);
-            CommandGUI.Fill(gpsCard,CommandGUI.ThemeBg);
-            CommandGUI.Fill(new Rect(gpsCard.x,gpsCard.y,4,gpsCard.height),CommandGUI.AccentGold);
-            CommandGUI.Fill(searchCard,CommandGUI.ThemeBg);
-            GUI.Label(new Rect(gpsCard.x+16,gpsCard.y+12,cardWidth-32,26),"01 / MY LIVE LOCATION",bodyStyle);
-            GUI.Label(new Rect(gpsCard.x+16,gpsCard.y+44,cardWidth-32,50),"Use this phone's GPS. Replaces the previously chosen place.",smallStyle);
-            if(CommandGUI.DrawButton(new Rect(gpsCard.x+16,gpsCard.yMax-56,cardWidth-32,44),"USE MY LIVE LOCATION",true,16))
+            GUI.Label(new Rect(panel.x+24,panel.y+70,width-48,36),"GPS is optional. Map providers receive the requested area and your IP address. No background location is used. You can search a place instead.",small);
+            if(CommandGUI.DrawButton(new Rect(panel.x+24,panel.y+115,width-48,46),"USE MY LIVE LOCATION",false,14))
             {
-                resumeMissionAfterLocationConsent=false;
-                showingLocationConsent=true;
+                if(campaignLocationEdit && !campaignBriefingReviewed)
+                {PlayerPrefs.SetString("GeoSniper.LocationSource","gps");PlayerPrefs.Save();activeLocation=null;campaignLocationEdit=false;SwitchTab(LobbyTab.Campaign);}
+                else if(campaignLocationEdit && campaignBriefingReviewed){resumeMissionAfterLocationConsent=false;StartCoroutine(Play(null,true));}
+                else {resumeMissionAfterLocationConsent=campaignLocationEdit || resumeMissionAfterLocationConsent;showingLocationConsent=true;}
             }
-            GUI.Label(new Rect(searchCard.x+16,searchCard.y+12,cardWidth-32,26),"02 / CHOOSE A PLACE",bodyStyle);
-            GUI.Label(new Rect(searchCard.x+16,searchCard.y+44,cardWidth-32,50),"Search any city or neighbourhood. No device location permission needed.",smallStyle);
-            if(CommandGUI.DrawButton(new Rect(searchCard.x+16,searchCard.yMax-56,cardWidth-32,44),"SEARCH A PLACE",false,16))
-                GUI.FocusControl("WorldMapPlaceSearch");
-
-            // Keep both source choices above the independently scrolling results.
-            GUI.Label(new Rect(panel.x+20,panel.y+302,panel.width-40,22),"SEARCH BY PLACE NAME AND CITY",smallStyle);
-
+            GUI.Label(new Rect(panel.x+24,panel.y+180,width-48,22),"OR SEARCH A CITY, NEIGHBOURHOOD OR LANDMARK",small);
             GUI.SetNextControlName("WorldMapPlaceSearch");
-            string search = GUI.TextField(new Rect(panel.x + 20, panel.y + 330, panel.width - 150, 42), locationSearch, 120, new GUIStyle(GUI.skin.textField) { fontSize = 16, alignment = TextAnchor.MiddleLeft });
-            if (search != locationSearch) { locationSearch = search; locationScroll = Vector2.zero; }
-
-            GUI.enabled = !searching && Time.realtimeSinceStartup >= nextSearch;
-            if (CommandGUI.DrawButton(new Rect(panel.xMax - 120, panel.y + 330, 100, 42), "SEARCH", false, 14))
-            {
-                StartCoroutine(SearchPlaces());
-            }
-            GUI.enabled = true;
-
-            // Recent Locations
-            GUI.Label(new Rect(panel.x + 20, panel.y + 383, 130, 24), "RECENT SEARCHES", smallStyle);
-            
-            string recentStr = PlayerPrefs.GetString("GeoSniper.RecentLocations", "");
-            string[] recent = recentStr.Split(new char[]{'|'}, System.StringSplitOptions.RemoveEmptyEntries);
-            float pX = panel.x + 150;
-            foreach (var p in recent)
-            {
-                if (CommandGUI.DrawButton(new Rect(pX, panel.y + 380, 110, 30), p.Length>16?p.Substring(0,15)+"...":p, false, 11))
-                {
-                    locationSearch = p;
-                    StartCoroutine(SearchPlaces());
-                }
-                pX += 116;
-                if (pX > panel.xMax - 120) break;
-            }
-
-            // Search Results Scroll List
-            var matches = locations ?? new System.Collections.Generic.List<GameLocation>();
-            float listY = panel.y + 422;
-            float listH = Mathf.Max(52,panel.height - 486);
-
-            locationScroll = GUI.BeginScrollView(new Rect(panel.x + 20, listY, panel.width - 40, listH), locationScroll, new Rect(0, 0, panel.width - 65, Mathf.Max(listH, matches.Count * 52)));
-            GameLocation chosen = null;
-            if(matches.Count==0)
-                GUI.Label(new Rect(8,8,panel.width-90,44),searching?"Searching...":"Search results appear here. Your saved searches do not override live GPS.",smallStyle);
-
-            for (int i = 0; i < matches.Count; i++)
-            {
-                Rect itemRect = new Rect(0, i * 52, panel.width - 65, 46);
-                if (CommandGUI.DrawButton(itemRect, matches[i].Label, false, 14))
-                {
-                    chosen = matches[i];
-                }
-            }
+            string query=GUI.TextField(new Rect(panel.x+24,panel.y+210,width-180,44),locationSearch,120,new GUIStyle(GUI.skin.textField){fontSize=17,alignment=TextAnchor.MiddleLeft});
+            if(query!=locationSearch)locationSearch=query;
+            if(CommandGUI.DrawButton(new Rect(panel.xMax-146,panel.y+210,122,44),"SEARCH",false,13) && !searching)StartCoroutine(SearchPlaces());
+            float listHeight=Mathf.Max(70,panel.height-335);var matches=locations ?? new System.Collections.Generic.List<GameLocation>();
+            locationScroll=GUI.BeginScrollView(new Rect(panel.x+24,panel.y+272,width-48,listHeight),locationScroll,new Rect(0,0,width-70,Mathf.Max(listHeight,matches.Count*52)));
+            GameLocation chosen=null;
+            if(matches.Count==0)GUI.Label(new Rect(8,8,width-100,44),searching?"Searching...":"Search results appear here.",small);
+            for(int i=0;i<matches.Count;i++)if(CommandGUI.DrawButton(new Rect(0,i*52,width-72,46),matches[i].Label,false,14))chosen=matches[i];
             GUI.EndScrollView();
-
-            var errStyle = new GUIStyle(GUI.skin.label)
+            GUI.Label(new Rect(panel.x+24,panel.yMax-51,width-48,42),locationError,small);
+            if(chosen!=null)
             {
-                fontSize = 12,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(0.8f, 0.85f, 0.9f) }
-            };
-            errStyle.wordWrap=true;
-            GUI.Label(new Rect(panel.x + 20, panel.yMax - 56, panel.width - 40, 48), locationError, errStyle);
-
-            string[] tabIcons = { "", "", "", "", "" };
-            string[] tabTitles = { "HOME", "CAMPAIGN", "ARMORY", "SECTOR", "VAULT" };
-            int locTab = CommandGUI.DrawTabBar(new Rect(0, h - 56f, w, 56f), tabIcons, tabTitles, 3);
-            if (locTab != 3) SwitchTab((LobbyTab)locTab);
-
-            if (chosen != null) {rangeToStart=false;campaignNodeToStart=-1;stageIndexToStart=-1;isPvPDuel=false;StartCoroutine(Play(chosen));}
+                if(duelLocationSelection)DeployPvPDuel(true,hostLocation:chosen);
+                else if(campaignLocationEdit)SelectCampaignPlace(chosen);
+                else if(resumeMissionAfterLocationConsent){resumeMissionAfterLocationConsent=false;StartCoroutine(Play(chosen));}
+                else {rangeToStart=false;campaignNodeToStart=-1;stageIndexToStart=-1;isPvPDuel=false;StartCoroutine(Play(chosen));}
+            }
         }
         IEnumerator SearchPlaces()
         {
@@ -1904,6 +1599,6 @@ namespace GeoSniper
             }
             searching=false;
         }
-        void OnDisable() { Application.lowMemory-=ReleaseLobbySectorOnLowMemory; StopAllCoroutines(); Input.location.Stop(); }
+        void OnDisable() { StopBriefingAudio(); if(CustomizingTouchControls) EndTouchControlLayout(false); Application.lowMemory-=ReleaseLobbySectorOnLowMemory; StopAllCoroutines(); Input.location.Stop(); }
     }
 }

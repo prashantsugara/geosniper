@@ -1,0 +1,44 @@
+{
+  "surfaces": [
+    {
+      "material": "civilian_carla_surface_0",
+      "texture": "Models/Civilians/civilian_carla_albedo_0"
+    },
+    {
+      "material": "civilian_doctor_surface_0",
+      "texture": "Models/Civilians/civilian_doctor_albedo_0"
+    },
+    {
+      "material": "civilian_doctor_surface_1",
+      "texture": "Models/Civilians/civilian_doctor_albedo_1"
+    },
+    {
+      "material": "civilian_doctor_surface_2",
+      "texture": "Models/Civilians/civilian_doctor_albedo_1"
+    },
+    {
+      "material": "civilian_doctor_surface_3",
+      "texture": "Models/Civilians/civilian_doctor_albedo_3"
+    },
+    {
+      "material": "civilian_doctor_surface_4",
+      "texture": "Models/Civilians/civilian_doctor_albedo_1"
+    },
+    {
+      "material": "civilian_doctor_surface_5",
+      "texture": "Models/Civilians/civilian_doctor_albedo_1"
+    },
+    {
+      "material": "civilian_doctor_surface_6",
+      "texture": "Models/Civilians/civilian_doctor_albedo_0"
+    },
+    {
+      "material": "civilian_doctor_surface_7",
+      "texture": "Models/Civilians/civilian_doctor_albedo_0"
+    },
+    {
+      "material": "civilian_eric_surface_0",
+      "texture": "Models/Civilians/civilian_eric_albedo_0"
+    }
+  ]
+}

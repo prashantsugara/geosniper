@@ -10,6 +10,7 @@ namespace GeoSniper
     public class AdManager : MonoBehaviour
     {
         static AdManager instance;
+        public static AdManager ActiveInstance => instance;
         public static AdManager Instance {
             get {
                 if(instance==null) instance=FindAnyObjectByType<AdManager>();
@@ -34,11 +35,17 @@ namespace GeoSniper
 
         public string customRewardedId="",customInterstitialId="",customRewardedInterstitialId="",customBannerId="",customNativeId="ca-app-pub-2796051533157572/2500637800";
         public bool testMode=true;
-        public int stagesPerInterstitial=1;
-        public float interstitialCooldownSeconds=90;
+        public int stagesPerInterstitial=3;
+        public float interstitialCooldownSeconds=180;
         public string Status {get;private set;}="Initializing ads...";
         public bool IsBusy=>waiting || showing;
+        bool applicationPaused,applicationFocused=true;
+        bool CanPresentFullScreenAd=>!applicationPaused && applicationFocused && Application.isFocused;
+        void OnApplicationPause(bool paused)=>applicationPaused=paused;
+        void OnApplicationFocus(bool focused)=>applicationFocused=focused;
         readonly ConcurrentQueue<Action> callbacks=new ConcurrentQueue<Action>();
+        readonly ConcurrentQueue<Action> nativeLoadCallbacks=new ConcurrentQueue<Action>();
+        readonly object nativeLoadGate=new object();
         RewardedAd rewarded;
         InterstitialAd interstitial;
         RewardedInterstitialAd rewardedInterstitial;
@@ -46,11 +53,17 @@ namespace GeoSniper
         BannerView banner;
         NativeOverlayAd nativeBillboardAd;
         bool loadingNativeAd, nativeAdShowing;
+        AdSize renderedNativeSize;
+        int nativeLoadVersion;
         Vector2Int currentNativePos = new Vector2Int(-9999, -9999);
         float rewardRetry,interstitialRetry,rewardedInterstitialRetry,deadline,noticeUntil,lastInterstitial=-999;
         float rewardRetryDelay = 60f, interstitialRetryDelay = 60f, rewardedInterstitialRetryDelay = 60f;
         float nativeAdRetry, nativeAdRetryDelay = 25f;
-        int completedStages;
+        int completedStages, completedDuelMatches;
+        float lastFullScreenAd = -999;
+        bool duelExitAdShowing;
+        const int DuelMatchesPerInterstitial = 2;
+        const float DuelInterstitialCooldownSeconds = 180;
         Action<bool> rewardCallback;
         Action closeCallback;
         Action<bool> rewardedInterstitialCallback;
@@ -92,7 +105,7 @@ namespace GeoSniper
             if(disposed) return;
             gatheringConsent=false;
             if(error!=null) Debug.LogWarning("[AdManager] Consent: "+error.Message);
-            if(AdsAllowed) {InitializeAds();LoadRewarded();LoadInterstitial();if(HasRewardedInterstitialUnit) LoadRewardedInterstitial();LoadNativeBillboardAd();}
+            if(AdsAllowed) {InitializeAds();LoadRewarded();if(completedStages>=1 || completedDuelMatches>=1){LoadInterstitial();if(HasRewardedInterstitialUnit) LoadRewardedInterstitial();}LoadNativeBillboardAd();}
             else {Status="Ads unavailable with the current privacy choices.";if(waiting){Notice(Status);FinishReward(false);}}
         }
         // ── BANNER AD (DISABLED IN LOBBY & FOOTER) ────────────────────────
@@ -120,11 +133,12 @@ namespace GeoSniper
             if(!PrivacyOptionsRequired) {Notice("No additional ad privacy choices are required for this region.");return;}
             privacyOpen=true;consentEpoch++;
             rewarded?.Destroy();rewarded=null;interstitial?.Destroy();interstitial=null;rewardedInterstitial?.Destroy();rewardedInterstitial=null;
+            DestroyNativeBillboardAd();
             try {ConsentForm.ShowPrivacyOptionsForm(error=>callbacks.Enqueue(()=>{
                 if(disposed) return;
                 privacyOpen=false;
                 if(error!=null) Notice("Privacy options could not open. Please retry.");
-                if(AdsAllowed) {InitializeAds();LoadRewarded();LoadInterstitial();if(HasRewardedInterstitialUnit) LoadRewardedInterstitial();}
+                if(AdsAllowed) {InitializeAds();LoadRewarded();if(completedStages>=1 || completedDuelMatches>=1){LoadInterstitial();if(HasRewardedInterstitialUnit) LoadRewardedInterstitial();}LoadNativeBillboardAd();}
             }));}
             catch(Exception e) {privacyOpen=false;Debug.LogException(e);Notice("Privacy options could not open. Please retry.");}
         }
@@ -138,7 +152,7 @@ namespace GeoSniper
                     if(status==null) {Notice("Ads could not initialize. Please retry.");return;}
                     initialized=true;
                     Debug.Log("[AdManager] SDK initialized; rewarded unit: "+GetRewardedAdUnitId());
-                    LoadRewarded();LoadInterstitial();if(HasRewardedInterstitialUnit) LoadRewardedInterstitial();
+                    LoadRewarded();if(completedStages>=1 || completedDuelMatches>=1){LoadInterstitial();if(HasRewardedInterstitialUnit) LoadRewardedInterstitial();}
                     LoadNativeBillboardAd();
                 }));
             } catch(Exception e) {initializing=false;Debug.LogException(e);Notice("Ads unavailable. Please retry.");}
@@ -171,7 +185,7 @@ namespace GeoSniper
 #else
             TestBannerIdAndroid;
 #endif
-        public string GetNativeAdUnitId()=>!string.IsNullOrWhiteSpace(customNativeId)?customNativeId:
+        public string GetNativeAdUnitId()=>!testMode && !string.IsNullOrWhiteSpace(customNativeId)?customNativeId:
 #if UNITY_IOS
             TestNativeIdIOS;
 #else
@@ -181,10 +195,15 @@ namespace GeoSniper
         public void LoadNativeBillboardAd(Action<bool> onComplete = null)
         {
             if(!AdsAllowed) { onComplete?.Invoke(false); return; }
+            if(!initialized) { InitializeAds(); onComplete?.Invoke(false); return; }
             if(nativeBillboardAd != null) { onComplete?.Invoke(true); return; }
             if(loadingNativeAd) { onComplete?.Invoke(false); return; }
+            if(Time.unscaledTime < nativeAdRetry) { onComplete?.Invoke(false); return; }
 
             loadingNativeAd = true;
+            GameAnalyticsManager.TrackAdRequest("native","debrief");
+            int epoch = consentEpoch;
+            int loadVersion = ++nativeLoadVersion;
             try
             {
                 var options = new NativeAdOptions
@@ -195,14 +214,16 @@ namespace GeoSniper
                 var request = new AdRequest();
                 NativeOverlayAd.Load(GetNativeAdUnitId(), request, options, (ad, error) =>
                 {
-                    callbacks.Enqueue(() =>
+                    QueueNativeLoad(() =>
                     {
+                        if(disposed || epoch != consentEpoch || loadVersion != nativeLoadVersion) { ad?.Destroy(); onComplete?.Invoke(false); return; }
                         loadingNativeAd = false;
-                        if(disposed || !AdsAllowed || error != null || ad == null)
+                        if(!AdsAllowed || error != null || ad == null)
                         {
                             ad?.Destroy();
                             nativeAdRetry = Time.unscaledTime + nativeAdRetryDelay;
                             nativeAdRetryDelay = Mathf.Min(nativeAdRetryDelay * 1.5f, 120f);
+                            GameAnalyticsManager.TrackAdLoadFailed("native",error!=null?error.GetMessage():"load_failed");
                             Debug.LogWarning("[AdManager] Native billboard ad load failed: " + error);
                             onComplete?.Invoke(false);
                             return;
@@ -210,25 +231,15 @@ namespace GeoSniper
 
                         nativeAdRetryDelay = 25f;
                         nativeBillboardAd = ad;
+                        GameAnalyticsManager.TrackAdLoaded("native","debrief");
+                        Debug.Log("[AdManager] Native loaded: " + ad.GetResponseInfo());
                         ConfigureNativeAdEvents(ad);
 
-                        var style = new NativeTemplateStyle
-                        {
-                            TemplateId = NativeTemplateId.Small
-                        };
-
-                        try
-                        {
-                            nativeBillboardAd.RenderTemplate(style, AdPosition.Bottom);
-                            nativeBillboardAd.Hide();
-                        }
-                        catch(Exception ex)
-                        {
-                            Debug.LogWarning("[AdManager] Native RenderTemplate: " + ex.Message);
-                        }
+                        // Render only when the dedicated debrief screen is visible.
+                        renderedNativeSize = null;
                         nativeAdShowing = false;
                         onComplete?.Invoke(true);
-                    });
+                    }, () => ad?.Destroy());
                 });
             }
             catch(Exception ex)
@@ -245,22 +256,13 @@ namespace GeoSniper
         {
             ad.OnAdImpressionRecorded += () => callbacks.Enqueue(() =>
             {
+                GameAnalyticsManager.TrackAdImpression("native","debrief");
                 Debug.Log("[AdManager] AdMob native billboard ad impression recorded.");
-                int cash = PlayerPrefs.GetInt("GeoSniper.Credits", 0);
-                PlayerPrefs.SetInt("GeoSniper.Credits", cash + 250);
-                PlayerPrefs.Save();
-                var mission = FindAnyObjectByType<UrbanCombatMission>();
-                if(mission != null) mission.ShowNotification("🎯 SPONSOR INTEL LOGGED (+ $250)", 2.5f);
             });
 
             ad.OnAdClicked += () => callbacks.Enqueue(() =>
             {
                 Debug.Log("[AdManager] AdMob native billboard ad clicked.");
-                int cash = PlayerPrefs.GetInt("GeoSniper.Credits", 0);
-                PlayerPrefs.SetInt("GeoSniper.Credits", cash + 500);
-                PlayerPrefs.Save();
-                var mission = FindAnyObjectByType<UrbanCombatMission>();
-                if(mission != null) mission.ShowNotification("🎯 SPONSOR INTEL ACQUIRED (+ $500)", 3.0f);
             });
 
             ad.OnAdPaid += (AdValue val) => callbacks.Enqueue(() =>
@@ -269,27 +271,69 @@ namespace GeoSniper
             });
         }
 
-        public void ShowNativeScreenAd(AdPosition position = AdPosition.Bottom)
+        void QueueNativeLoad(Action apply, Action release)
         {
-            if(!AdsAllowed) return;
+            lock(nativeLoadGate)
+            {
+                if(disposed) { release(); return; }
+                nativeLoadCallbacks.Enqueue(() => { if(disposed) release(); else apply(); });
+            }
+        }
+
+        static AdSize NativeScreenSize(Rect safeArea, float deviceScale)
+        {
+            float scale = Mathf.Max(1f, deviceScale);
+            int availableWidth = Mathf.FloorToInt(safeArea.width / scale) - 24;
+            int availableHeight = Mathf.FloorToInt(safeArea.height / scale * .38f);
+            // Keep the SDK's attribution, headline and CTA readable on small screens.
+            if(availableWidth < 280 || availableHeight < 100) return null;
+            return new AdSize(Mathf.Min(480, availableWidth), Mathf.Min(120, availableHeight));
+        }
+
+        static NativeTemplateStyle NativeScreenStyle()
+        {
+            var background = new Color(.06f, .09f, .14f);
+            return new NativeTemplateStyle {
+                TemplateId = NativeTemplateId.Small,
+                MainBackgroundColor = background,
+                PrimaryText = new NativeTemplateTextStyle { TextColor = Color.white, BackgroundColor = background, FontSize = 16 },
+                SecondaryText = new NativeTemplateTextStyle { TextColor = new Color(.78f,.85f,.90f), BackgroundColor = background, FontSize = 12 },
+                TertiaryText = new NativeTemplateTextStyle { TextColor = new Color(.78f,.85f,.90f), BackgroundColor = background, FontSize = 12 },
+                CallToActionText = new NativeTemplateTextStyle { TextColor = new Color(.02f,.05f,.07f), BackgroundColor = new Color(.05f,.85f,.92f), FontSize = 14 }
+            };
+        }
+
+        public bool ShowNativeScreenAd(AdPosition position = AdPosition.Bottom)
+        {
+            if(!AdsAllowed) return false;
             if(nativeBillboardAd == null)
             {
                 if(!loadingNativeAd) LoadNativeBillboardAd();
-                return;
+                return false;
             }
 
             try
             {
+                var size = NativeScreenSize(Screen.safeArea, MobileAds.Utils.GetDeviceScale());
+                if(size == null) { HideNativeScreenAd(); return false; }
+                if(renderedNativeSize != size)
+                {
+                    nativeBillboardAd.RenderTemplate(NativeScreenStyle(), size, position);
+                    renderedNativeSize = size;
+                }
                 nativeBillboardAd.SetTemplatePosition(position);
                 if(!nativeAdShowing)
                 {
                     nativeBillboardAd.Show();
                     nativeAdShowing = true;
                 }
+                return true;
             }
             catch(Exception ex)
             {
                 Debug.LogWarning("[AdManager] ShowNativeScreenAd error: " + ex.Message);
+                DestroyNativeBillboardAd();
+                return false;
             }
         }
 
@@ -320,12 +364,14 @@ namespace GeoSniper
 
         public void DestroyNativeBillboardAd()
         {
+            nativeLoadVersion++;
             if(nativeBillboardAd != null)
             {
                 try { nativeBillboardAd.Destroy(); } catch {}
                 nativeBillboardAd = null;
             }
             nativeAdShowing = false;
+            renderedNativeSize = null;
             loadingNativeAd = false;
             currentNativePos = new Vector2Int(-9999, -9999);
             nativeAdRetry = Time.unscaledTime + 5f;
@@ -333,6 +379,7 @@ namespace GeoSniper
         void LoadRewarded() {
             if(!AdsAllowed || !initialized || loadingReward || rewarded!=null || showing) return;
             loadingReward=true;
+            GameAnalyticsManager.TrackAdRequest("rewarded","reward_unit");
             int epoch=consentEpoch;
             try {
                 RewardedAd.Load(GetRewardedAdUnitId(),new AdRequest(),(ad,error)=>callbacks.Enqueue(()=>{
@@ -342,15 +389,23 @@ namespace GeoSniper
                         ad?.Destroy();
                         rewardRetry=Time.unscaledTime+rewardRetryDelay;
                         rewardRetryDelay=Mathf.Min(rewardRetryDelay*1.6f,300f);
+                        GameAnalyticsManager.TrackAdLoadFailed("rewarded",error!=null?error.GetMessage():"load_failed");
                         Debug.LogWarning("[AdManager] Rewarded load failed: "+error);
                         if(waiting) {Notice("Ad unavailable. Check your connection and retry.");FinishReward(false);}
                         return;
                     }
                     rewardRetryDelay=60f;
                     rewarded=ad;
+                    GameAnalyticsManager.TrackAdLoaded("rewarded","reward_unit");
+                    Debug.Log("[AdManager] Rewarded loaded: "+ad.GetResponseInfo());
+                    ad.OnAdImpressionRecorded+=()=>callbacks.Enqueue(()=>{
+                        GameAnalyticsManager.TrackAdImpression("rewarded","reward_unit");
+                        Debug.Log("[AdManager] Rewarded impression recorded.");
+                    });
                     ad.OnAdFullScreenContentClosed+=()=>callbacks.Enqueue(()=>{if(rewarded==ad) FinishReward(earned);});
                     ad.OnAdFullScreenContentFailed+=failure=>callbacks.Enqueue(()=>{
                         if(rewarded!=ad) return;
+                        GameAnalyticsManager.TrackAdShowFailed("rewarded",failure!=null?failure.GetMessage():"show_failed");
                         Debug.LogWarning("[AdManager] Rewarded show failed: "+failure);
                         Notice("Ad could not open. Please retry.");FinishReward(false);
                     });
@@ -367,6 +422,7 @@ namespace GeoSniper
         void LoadInterstitial() {
             if(!AdsAllowed || !initialized || loadingInterstitial || interstitial!=null || showing) return;
             loadingInterstitial=true;
+            GameAnalyticsManager.TrackAdRequest("interstitial","interstitial_unit");
             int epoch=consentEpoch;
             try {
                 InterstitialAd.Load(GetInterstitialAdUnitId(),new AdRequest(),(ad,error)=>callbacks.Enqueue(()=>{
@@ -376,13 +432,24 @@ namespace GeoSniper
                         ad?.Destroy();
                         interstitialRetry=Time.unscaledTime+interstitialRetryDelay;
                         interstitialRetryDelay=Mathf.Min(interstitialRetryDelay*1.6f,300f);
+                        GameAnalyticsManager.TrackAdLoadFailed("interstitial",error!=null?error.GetMessage():"load_failed");
                         Debug.LogWarning("[AdManager] Interstitial load failed: "+error);return;
                     }
                     interstitialRetryDelay=60f;
                     interstitial=ad;
+                    GameAnalyticsManager.TrackAdLoaded("interstitial","interstitial_unit");
+                    Debug.Log("[AdManager] Interstitial loaded: "+ad.GetResponseInfo());
+                    ad.OnAdImpressionRecorded+=()=>callbacks.Enqueue(()=>{
+                        GameAnalyticsManager.TrackAdImpression("interstitial","interstitial_unit");
+                        Debug.Log("[AdManager] Interstitial impression recorded.");
+                    });
+                    ad.OnAdFullScreenContentOpened+=()=>callbacks.Enqueue(()=>{
+                        if(interstitial==ad && duelExitAdShowing) completedDuelMatches=0;
+                    });
                     ad.OnAdFullScreenContentClosed+=()=>callbacks.Enqueue(()=>{if(interstitial==ad) FinishInterstitial();});
                     ad.OnAdFullScreenContentFailed+=failure=>callbacks.Enqueue(()=>{
                         if(interstitial!=ad) return;
+                        GameAnalyticsManager.TrackAdShowFailed("interstitial",failure!=null?failure.GetMessage():"show_failed");
                         Debug.LogWarning("[AdManager] Interstitial show failed: "+failure);FinishInterstitial();
                     });
                 }));
@@ -409,6 +476,8 @@ namespace GeoSniper
                     }
                     rewardedInterstitialRetryDelay=60f;
                     rewardedInterstitial=ad;
+                    Debug.Log("[AdManager] Rewarded interstitial loaded: "+ad.GetResponseInfo());
+                    ad.OnAdImpressionRecorded+=()=>callbacks.Enqueue(()=>Debug.Log("[AdManager] Rewarded interstitial impression recorded."));
                     ad.OnAdFullScreenContentClosed+=()=>callbacks.Enqueue(()=>{if(rewardedInterstitial==ad) FinishRewardedInterstitial(earned);});
                     ad.OnAdFullScreenContentFailed+=failure=>callbacks.Enqueue(()=>{
                         if(rewardedInterstitial!=ad) return;
@@ -423,6 +492,7 @@ namespace GeoSniper
             }
         }
         public void ShowRewardedAd(Action<bool> onComplete,string placementTag="general_reward") {
+            if(!CanPresentFullScreenAd){onComplete?.Invoke(false);return;}
             if(!ReleaseConfiguration.Current.adsEnabled) {Notice("Sponsored rewards are currently unavailable.");onComplete?.Invoke(false);return;}
             if(IsBusy) {onComplete?.Invoke(false);return;}
             rewardCallback=onComplete;earned=false;waiting=true;deadline=Time.unscaledTime+25;
@@ -433,10 +503,11 @@ namespace GeoSniper
             else {rewarded?.Destroy();rewarded=null;LoadRewarded();}
         }
         void PresentReward() {
-            if(!AdsAllowed || !waiting || rewarded==null || !rewarded.CanShowAd()) return;
+            if(!CanPresentFullScreenAd || !AdsAllowed || !waiting || rewarded==null || !rewarded.CanShowAd()) return;
             waiting=false;showing=true;
             var shown=rewarded;
-            try {shown.Show(reward=>callbacks.Enqueue(()=>{if(rewarded==shown && showing) earned=true;}));}
+            lastFullScreenAd=Time.unscaledTime;
+            try {shown.Show(reward=>callbacks.Enqueue(()=>{if(rewarded==shown && showing){ earned=true; GameAnalyticsManager.TrackCustomEvent("ad_reward_granted",new System.Collections.Generic.Dictionary<string,object>{{"ad_format","rewarded"}}); }}));}
             catch(Exception e) {Debug.LogException(e);Notice("Ad could not open. Please retry.");FinishReward(false);}
         }
         void FinishReward(bool success) {
@@ -446,22 +517,40 @@ namespace GeoSniper
             rewarded?.Destroy();rewarded=null;earned=false;
             try {callback?.Invoke(success);} finally {if(!disposed && Time.unscaledTime>=rewardRetry) LoadRewarded();}
         }
-        public void NotifyStageCompleted()=>completedStages++;
+        public void NotifyStageCompleted()
+        {
+            completedStages++;
+            if(!disposed && interstitial==null && !loadingInterstitial) LoadInterstitial();
+        }
+
+        public void NotifyDuelMatchCompleted()
+        {
+            completedDuelMatches++;
+            if(!disposed && interstitial==null && !loadingInterstitial) LoadInterstitial();
+        }
+
+        bool DuelExitAdDue(float now) => completedDuelMatches >= DuelMatchesPerInterstitial
+            && now - lastFullScreenAd >= DuelInterstitialCooldownSeconds
+            && now - lastInterstitial >= Mathf.Max(DuelInterstitialCooldownSeconds, interstitialCooldownSeconds);
+
+        public bool ShowDuelExitInterstitialIfReady(Action onClosed=null)
+        {
+            // An ordinary interstitial at match exit: never wait for a load or use a rewarded format.
+            if(CanPresentFullScreenAd && !disposed && AdsAllowed && !IsBusy && DuelExitAdDue(Time.unscaledTime)
+                && interstitial!=null && interstitial.CanShowAd())
+            {
+                duelExitAdShowing=true;
+                bool previouslyPaused=AudioListener.pause;
+                AudioListener.pause=true;
+                ShowInterstitial(() => { duelExitAdShowing=false; AudioListener.pause=previouslyPaused; onClosed?.Invoke(); },"duel_match_exit");
+                return true;
+            }
+            onClosed?.Invoke();
+            return false;
+        }
         public bool ShowInterstitialIfReady(Action onClosed=null,string placementTag="transition") {
-            if(AdsAllowed && !IsBusy && completedStages>=Mathf.Max(1,stagesPerInterstitial)
+            if(CanPresentFullScreenAd && AdsAllowed && !IsBusy && completedStages>=Mathf.Max(1,stagesPerInterstitial)
                 && Time.unscaledTime-lastInterstitial>=interstitialCooldownSeconds) {
-                if(rewardedInterstitial!=null && rewardedInterstitial.CanShowAd()) {
-                    ShowRewardedInterstitial(success=>{
-                        if(success) {
-                            try {
-                                PlayerPrefs.SetInt("GeoSniper.Credits", PlayerPrefs.GetInt("GeoSniper.Credits", 0) + 500);
-                                PlayerPrefs.Save();
-                            } catch {}
-                        }
-                        onClosed?.Invoke();
-                    },placementTag);
-                    return true;
-                }
                 if(interstitial!=null && interstitial.CanShowAd()) {
                     ShowInterstitial(onClosed,placementTag);
                     return true;
@@ -470,11 +559,13 @@ namespace GeoSniper
             onClosed?.Invoke();return false;
         }
         public void ShowInterstitial(Action onClosed=null,string placementTag="transition") {
+            if(!CanPresentFullScreenAd){onClosed?.Invoke();return;}
             if(!AdsAllowed || IsBusy || interstitial==null || !interstitial.CanShowAd()) {
                 if(!IsBusy) {interstitial?.Destroy();interstitial=null;LoadInterstitial();}
                 onClosed?.Invoke();return;
             }
             closeCallback=onClosed;showing=true;completedStages=0;lastInterstitial=Time.unscaledTime;
+            lastFullScreenAd=Time.unscaledTime;
             try {interstitial.Show();} catch(Exception e) {Debug.LogException(e);FinishInterstitial();}
         }
         void FinishInterstitial() {
@@ -483,7 +574,7 @@ namespace GeoSniper
             try {callback?.Invoke();} finally {if(!disposed) LoadInterstitial();}
         }
         public bool ShowRewardedInterstitialIfReady(Action<bool> onComplete=null,string placementTag="stage_transition") {
-            if(AdsAllowed && !IsBusy && completedStages>=Mathf.Max(1,stagesPerInterstitial)
+            if(CanPresentFullScreenAd && AdsAllowed && !IsBusy && completedStages>=Mathf.Max(1,stagesPerInterstitial)
                 && Time.unscaledTime-lastInterstitial>=interstitialCooldownSeconds
                 && rewardedInterstitial!=null && rewardedInterstitial.CanShowAd()) {
                 ShowRewardedInterstitial(onComplete,placementTag);
@@ -492,6 +583,7 @@ namespace GeoSniper
             return false;
         }
         public void ShowRewardedInterstitial(Action<bool> onComplete=null,string placementTag="stage_transition") {
+            if(!CanPresentFullScreenAd){onComplete?.Invoke(false);return;}
             if(!AdsAllowed || IsBusy || rewardedInterstitial==null || !rewardedInterstitial.CanShowAd()) {
                 if(!IsBusy) {rewardedInterstitial?.Destroy();rewardedInterstitial=null;if(HasRewardedInterstitialUnit) LoadRewardedInterstitial();}
                 onComplete?.Invoke(false);
@@ -500,6 +592,7 @@ namespace GeoSniper
             rewardedInterstitialCallback=onComplete;
             earned=false;
             showing=true;
+            lastFullScreenAd=Time.unscaledTime;
             completedStages=0;
             lastInterstitial=Time.unscaledTime;
             var shown=rewardedInterstitial;
@@ -523,7 +616,9 @@ namespace GeoSniper
         }
         void Notice(string message) {Status=message;noticeUntil=Time.unscaledTime+7;}
         void Update() {
+            while(nativeLoadCallbacks.TryDequeue(out var nativeCallback)) {try {nativeCallback();} catch(Exception e) {Debug.LogException(e);}}
             while(callbacks.TryDequeue(out var callback)) {try {callback();} catch(Exception e) {Debug.LogException(e);}}
+            if(waiting && CanPresentFullScreenAd && Time.unscaledTime<deadline)PresentReward();
             if(waiting && Time.unscaledTime>=deadline) {
                 Notice("Ad loading timed out. Check your connection and retry.");FinishReward(false);
             }
@@ -536,7 +631,10 @@ namespace GeoSniper
         }
         void OnDestroy() {
             if(instance!=this) return;
-            disposed=true;instance=null;rewarded?.Destroy();interstitial?.Destroy();rewardedInterstitial?.Destroy();banner?.Destroy();banner=null;
+            lock(nativeLoadGate) disposed=true;
+            instance=null;rewarded?.Destroy();interstitial?.Destroy();rewardedInterstitial?.Destroy();banner?.Destroy();banner=null;
+            while(nativeLoadCallbacks.TryDequeue(out var pendingNative)) {try {pendingNative();} catch(Exception e) {Debug.LogException(e);}}
+            DestroyNativeBillboardAd();
             rewardCallback?.Invoke(false);closeCallback?.Invoke();rewardedInterstitialCallback?.Invoke(false);
         }
         void OnGUI() {

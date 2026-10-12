@@ -69,7 +69,7 @@ namespace GeoSniper
             {
                 var player = bot.player.GetComponent<UrbanPlayer>();
                 Vector3 target = bot.player.position + Vector3.up * (player != null && player.IsCrouching ? .85f : 1.35f);
-                if ((target-grip).sqrMagnitude > .001f) facing = Quaternion.LookRotation(target-grip, visual.up);
+                if ((target-grip).sqrMagnitude > .001f) facing = BoundedAim(bot.transform,target-grip);
                 if (stock != null && rightHand != null && rightHand.parent != null && rightHand.parent.parent != null)
                 {
                     Vector3 shoulder = rightHand.parent.parent.position + visual.forward * .06f - visual.up * .04f;
@@ -78,7 +78,7 @@ namespace GeoSniper
             }
             // Resolve both hand contacts against the same final weapon pose in this frame.
             transform.SetPositionAndRotation(grip, facing * Quaternion.Euler(localEulerOffset));
-            WeaponGripPose.SolveArm(rightHand, rightPalm, grip, facing * rightGripRotation, visual.right-visual.up);
+            WeaponGripPose.SolveArm(rightHand, rightPalm, grip, facing * rightGripRotation, visual.right-visual.up,true);
             if (rightHand != null && !aiming)
                 transform.position = rightHand.TransformPoint(rightPalm);
             if (support != null)
@@ -89,8 +89,15 @@ namespace GeoSniper
                     Vector3 magazinePoint=magazine!=null?magazine.position:transform.position-visual.up*.13f;
                     supportPoint=Vector3.Lerp(supportPoint,magazinePoint,reloadPose);
                 }
-                WeaponGripPose.SolveArm(leftHand, leftPalm, supportPoint, facing * leftGripRotation, -visual.right-visual.up);
+                WeaponGripPose.SolveArm(leftHand, leftPalm, supportPoint, facing * leftGripRotation, -visual.right-visual.up,true);
             }
+        }
+        public static Quaternion BoundedAim(Transform torso,Vector3 direction)
+        {
+            Vector3 local=torso.InverseTransformDirection(direction);
+            float yaw=Mathf.Clamp(Mathf.Atan2(local.x,local.z)*Mathf.Rad2Deg,-35f,35f);
+            float pitch=Mathf.Clamp(-Mathf.Atan2(local.y,new Vector2(local.x,local.z).magnitude)*Mathf.Rad2Deg,-35f,35f);
+            return torso.rotation*Quaternion.Euler(pitch,yaw,0);
         }
     }
 }

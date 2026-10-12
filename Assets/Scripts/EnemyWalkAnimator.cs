@@ -3,6 +3,7 @@ using UnityEngine;
 namespace GeoSniper
 {
     // Fallback gait for characters without authored locomotion clips.
+    [DefaultExecutionOrder(80)]
     public sealed class EnemyWalkAnimator : MonoBehaviour
     {
         sealed class Leg
@@ -33,8 +34,52 @@ namespace GeoSniper
         Quaternion spineRest;
         Transform head;
         Quaternion headRest;
-        Vector3 headYawAxis;
-        float idlePhase,idleLook;
+        Vector3 headYawAxis,headPitchAxis,headRollAxis,spinePitchAxis,spineYawAxis,spineRollAxis;
+        float idlePhase,idleLook,aimBlend,hitPose,shotPose;
+        ArmyAnimation authoredArmy;
+        CivilianAnimation authoredCivilian;
+        Animator[] authoredAnimators;
+        EnemyWeaponAnchor weaponAnchor;
+        float nextWeaponLookup;
+
+        bool AuthoredPoseActive
+        {
+            get
+            {
+                if(authoredArmy!=null && authoredArmy.enabled && authoredArmy.Ready) return true;
+                if(authoredCivilian!=null && authoredCivilian.enabled && authoredCivilian.Ready)return true;
+                if(authoredAnimators!=null)
+                    foreach(var animator in authoredAnimators)
+                        if(animator!=null && animator.enabled && animator.gameObject.activeInHierarchy
+                            && animator.runtimeAnimatorController!=null) return true;
+                return false;
+            }
+        }
+        void CaptureDrivers()
+        {
+            authoredArmy=GetComponent<ArmyAnimation>();
+            authoredCivilian=GetComponent<CivilianAnimation>();
+            authoredAnimators=modelRoot.GetComponentsInChildren<Animator>(true);
+        }
+        void CaptureSpine()
+        {
+            spine=FindBone("spine1", "spine01", "chest", "spine", "torso", "upperbody");
+            if(spine==null)return;
+            spineRest=spine.localRotation;
+            spinePitchAxis=spine.InverseTransformDirection(transform.right).normalized;
+            spineYawAxis=spine.InverseTransformDirection(transform.up).normalized;
+            spineRollAxis=spine.InverseTransformDirection(transform.forward).normalized;
+        }
+        void CaptureWeapon()
+        {
+            if(bot==null || bot.isDisarmed || modelRoot==null)return;
+            enemyWeapon=FindBone("enemy tactical rifle", "attached_ak47");
+            if(enemyWeapon==null)return;
+            weaponRestPosition=enemyWeapon.localPosition;
+            weaponRestRotation=enemyWeapon.localRotation;
+            weaponLeftHand=FindBone("lefthand", "hand_l", "left_hand", "l_wrist", "mixamoriglefthand");
+            weaponAnchor=enemyWeapon.GetComponent<EnemyWeaponAnchor>();
+        }
         void CaptureRoot()
         {
             rootRestPosition=modelRoot.localPosition; rootRestRotation=modelRoot.localRotation;
@@ -46,22 +91,18 @@ namespace GeoSniper
             bot=owner; modelRoot=visual;
             if(visual==null || visual==transform) return;
             CaptureRoot();
+            CaptureDrivers();
+            // A fallback component must never realign or overwrite an authored rig.
+            if(AuthoredPoseActive)return;
             left=CreateLeg("left",0); right=CreateLeg("right",.5f);
-            enemyWeapon = FindBone("enemy tactical rifle", "attached_ak47");
             leftArm = FindBone("leftarm", "leftshoulder", "l_upperarm", "l_arm", "upperarml", "arml", "bipupperarml");
             rightArm = FindBone("rightarm", "rightshoulder", "r_upperarm", "r_arm", "upperarmr", "armr", "bipupperarmr");
             if (leftArm != null) leftArmRest = leftArm.localRotation;
             if (rightArm != null) rightArmRest = rightArm.localRotation;
             if (leftArm != null) leftArmAxis = leftArm.InverseTransformDirection(transform.right).normalized;
             if (rightArm != null) rightArmAxis = rightArm.InverseTransformDirection(transform.right).normalized;
-            if (enemyWeapon != null)
-            {
-                weaponRestPosition = enemyWeapon.localPosition;
-                weaponRestRotation = enemyWeapon.localRotation;
-                weaponLeftHand = FindBone("lefthand", "hand_l", "left_hand", "l_wrist", "mixamoriglefthand");
-            }
-            spine = FindBone("spine1", "spine01", "chest", "spine", "torso", "upperbody");
-            if (spine != null) spineRest = spine.localRotation;
+            CaptureWeapon();
+            CaptureSpine();
             CaptureHead();
             previousPosition=transform.position;
         }
@@ -70,6 +111,8 @@ namespace GeoSniper
             civilian=owner; modelRoot=visual;
             if(visual==null || visual==transform) return;
             CaptureRoot();
+            CaptureDrivers();
+            if(AuthoredPoseActive)return;
             left=CreateLeg("left",0); right=CreateLeg("right",.5f);
             leftArm = FindBone("leftarm", "leftshoulder", "l_upperarm", "l_arm", "upperarml", "arml", "bipupperarml");
             rightArm = FindBone("rightarm", "rightshoulder", "r_upperarm", "r_arm", "upperarmr", "armr", "bipupperarmr");
@@ -79,8 +122,7 @@ namespace GeoSniper
             if(rightArm!=null) rightArmRest=rightArm.localRotation;
             if(leftArm!=null) leftArmAxis=leftArm.InverseTransformDirection(transform.right).normalized;
             if(rightArm!=null) rightArmAxis=rightArm.InverseTransformDirection(transform.right).normalized;
-            spine = FindBone("spine1", "spine01", "chest", "spine", "torso", "upperbody");
-            if (spine != null) spineRest = spine.localRotation;
+            CaptureSpine();
             CaptureHead();
             previousPosition=transform.position;
         }
@@ -90,6 +132,8 @@ namespace GeoSniper
             if(head==null)return;
             headRest=head.localRotation;
             headYawAxis=head.InverseTransformDirection(transform.up).normalized;
+            headPitchAxis=head.InverseTransformDirection(transform.right).normalized;
+            headRollAxis=head.InverseTransformDirection(transform.forward).normalized;
             idlePhase=Random.Range(0f,6.28f);
         }
         Leg CreateLeg(string side, float offset)
@@ -163,8 +207,8 @@ namespace GeoSniper
             {
                 Vector3 direction=child.position-arm.position;
                 if(direction.magnitude<.05f) continue;
-                // Only lower a near-horizontal bind-pose arm. Preserve already-authored resting poses.
-                if(Mathf.Abs(Vector3.Dot(direction.normalized,transform.up))<.45f)
+                // Lower T- and A-pose arms; retain already-down resting arms.
+                if(Mathf.Abs(Vector3.Dot(direction.normalized,transform.up))<.92f)
                     arm.rotation=Quaternion.FromToRotation(direction.normalized,
                         transform.TransformDirection(new Vector3(side*.18f,-1,.06f)).normalized)*arm.rotation;
                 break;
@@ -176,9 +220,22 @@ namespace GeoSniper
         float deathBlend;
         float coverBlend;
 
-        void Update()
+        void LateUpdate()
         {
-            if (bot == null && civilian == null) return;
+            if ((bot == null && civilian == null) || modelRoot==null || AuthoredPoseActive) return;
+            // The bot moves in Update. Rebuild the fallback pose after movement, before
+            // EnemyBot's aim correction and the weapon anchor's final hand contacts.
+            float delta=Mathf.Max(0f,Time.deltaTime);
+            if(bot!=null)
+            {
+                aimBlend=Mathf.MoveTowards(aimBlend,bot.IsAiming?1f:0f,delta*6f);
+                float response=1f-Mathf.Exp(-delta*32f);
+                hitPose=Mathf.Lerp(hitPose,Mathf.Clamp01(bot.HitReactionStrength),response);
+                shotPose=Mathf.Lerp(shotPose,Mathf.Clamp01(bot.ShotReactionStrength),response);
+                // Enemy weapons are built after the fallback driver is initialized.
+                if(enemyWeapon==null && Time.time>=nextWeaponLookup)
+                {nextWeaponLookup=Time.time+.5f;CaptureWeapon();}
+            }
             bool dead=bot!=null && bot.Actor!=null && bot.Actor.IsDead;
             if(dead && modelRoot!=null)
             {
@@ -190,7 +247,9 @@ namespace GeoSniper
             }
             Vector3 movement = transform.position - previousPosition; movement.y = 0;
             previousPosition = transform.position;
-            
+            // Respawns and mission placement are not a sprint or a hard impact.
+            if(movement.sqrMagnitude>4f)
+            {movement=Vector3.zero;smoothedVelocity=Vector3.zero;smoothedTurnRate=0f;}
             Vector3 velocity = movement / Mathf.Max(Time.deltaTime, 0.001f);
             smoothedVelocity = Vector3.Lerp(smoothedVelocity, velocity, Time.deltaTime * 5f);
             
@@ -211,7 +270,7 @@ namespace GeoSniper
             blend = Mathf.MoveTowards(blend, moving ? 1f : 0f, Time.deltaTime * 5f);
 
             bool combat = bot != null && (bot.currentState == AIState.Combat || bot.currentState == AIState.TakeCover || bot.isCounterSniper);
-            bool sprinting = curSpeed > 3.4f || (bot != null && (bot.coverSubState == CoverSubState.Sprinting || bot.isFugitiveRunner));
+            bool sprinting = curSpeed > 3.4f || (bot != null && (bot.IsSprinting || bot.isFugitiveRunner));
 
             // Fluent momentum and banking system
             if (modelRoot != null && modelRoot!=transform)
@@ -225,7 +284,7 @@ namespace GeoSniper
                     bob += (limpCycle > 0 ? -0.055f : 0.015f) * blend;
                     limpRoll = 7f * blend;
                 }
-                bool takingCover = bot != null && (bot.IsCrouchingInCover || (bot.currentState == AIState.TakeCover && bot.coverSubState == CoverSubState.Crouching));
+                bool takingCover = bot != null && bot.IsCrouched;
                 bool civilianCowering = civilian != null && civilian.currentState == CivilianState.Cower;
                 coverBlend = Mathf.MoveTowards(coverBlend, (takingCover || civilianCowering) ? 1f : 0f, Time.deltaTime * 4.5f);
                 
@@ -240,26 +299,31 @@ namespace GeoSniper
                 float coverLean = takingCover ? Mathf.Sin(Time.time * 3.5f) * 1.2f : 0f;
                 
                 float flinchPitch = 0f, flinchRoll = 0f;
-                if (bot != null && bot.StaggerProgress > 0f)
+                if (bot != null)
                 {
-                    float p = bot.StaggerProgress;
-                    float magnitude = Mathf.Sin(p * Mathf.PI);
-                    Vector3 localFlinchDir = transform.InverseTransformDirection(bot.FlinchDirection);
-                    flinchPitch = -localFlinchDir.z * 40f * magnitude;
-                    flinchRoll = localFlinchDir.x * 25f * magnitude;
+                    // Disarm/leg injuries use a longer stagger than a normal hit.
+                    // Clamp before sin so these impulses never reverse direction.
+                    float stagger=Mathf.Sin(Mathf.Clamp01(bot.StaggerProgress)*Mathf.PI);
+                    float magnitude=Mathf.Max(hitPose,stagger*.45f);
+                    Vector3 localFlinchDir=transform.InverseTransformDirection(bot.FlinchDirection);
+                    flinchPitch=-Mathf.Clamp(localFlinchDir.z,-1f,1f)*8f*magnitude;
+                    flinchRoll=Mathf.Clamp(bot.HitReactionSide,-1f,1f)*5f*magnitude;
                 }
-                
-                modelRoot.localPosition = rootRestPosition + Vector3.up * (bob - .20f * coverBlend);
-                modelRoot.localRotation = rootRestRotation * Quaternion.Euler(Mathf.Clamp(pitch + flinchPitch, -8f, 8f) + 6f * coverBlend, hipYaw, totalRoll + flinchRoll + coverLean);
 
-                // Natural Thoracic Counter-Rotation & Spine Posture
+                modelRoot.localPosition = rootRestPosition + Vector3.up * (bob - .20f * coverBlend)
+                    +Vector3.back*(.025f*hitPose);
+                modelRoot.localRotation = rootRestRotation * Quaternion.Euler(Mathf.Clamp(pitch,-8f,8f)+flinchPitch+6f*coverBlend,hipYaw,totalRoll+flinchRoll+coverLean);
+
+                // Keep recoil/flinch in the upper body so a reaction does not replace gait.
                 if (spine != null)
                 {
-                    float forwardHunch = (combat ? 3.5f : 1.5f) + (sprinting ? 2.5f : 0f) + (coverBlend * (civilianCowering ? 17f : 4f));
-                    float spineCounterYaw = -hipYaw * 0.45f;
-                    Vector3 localPitch = spine.InverseTransformDirection(transform.right).normalized;
-                    Vector3 localYaw = spine.InverseTransformDirection(transform.up).normalized;
-                    spine.localRotation = spineRest * Quaternion.AngleAxis(forwardHunch, localPitch) * Quaternion.AngleAxis(spineCounterYaw, localYaw);
+                    float forwardHunch = (bot!=null?Mathf.Lerp(1.5f,3.5f,aimBlend):(combat?3.5f:1.5f))
+                        + (sprinting ? 2.5f : 0f) + (coverBlend * (civilianCowering ? 17f : 4f));
+                    float hitSide=bot!=null?Mathf.Clamp(bot.HitReactionSide,-1f,1f):0f;
+                    spine.localRotation=spineRest
+                        *Quaternion.AngleAxis(forwardHunch-hitPose*13f-shotPose*3f,spinePitchAxis)
+                        *Quaternion.AngleAxis(-hipYaw*.45f+hitSide*hitPose*9f,spineYawAxis)
+                        *Quaternion.AngleAxis(hitSide*hitPose*6f,spineRollAxis);
                 }
             }
 
@@ -306,7 +370,10 @@ namespace GeoSniper
                 }
                 else if(bot!=null && !combat && !moving)desired=Mathf.Sin(Time.time*.6f+idlePhase)*9f;
                 idleLook=Mathf.MoveTowards(idleLook,desired,Time.deltaTime*65f);
-                head.localRotation=headRest*Quaternion.AngleAxis(idleLook,headYawAxis);
+                float hitSide=bot!=null?Mathf.Clamp(bot.HitReactionSide,-1f,1f):0f;
+                head.localRotation=headRest*Quaternion.AngleAxis(idleLook+hitSide*hitPose*5f,headYawAxis)
+                    *Quaternion.AngleAxis(-hitPose*9f-shotPose*2f,headPitchAxis)
+                    *Quaternion.AngleAxis(hitSide*hitPose*5f,headRollAxis);
             }
         }
 
@@ -314,20 +381,24 @@ namespace GeoSniper
         {
             if (bot == null || enemyWeapon == null || bot.Actor == null || bot.Actor.IsDead) return;
             if (bot.isDisarmed) return;
-            bool combat = bot.currentState == AIState.Combat || bot.currentState == AIState.TakeCover || bot.isCounterSniper;
-            bool sprinting = curSpeed > 3.4f || bot.coverSubState == CoverSubState.Sprinting || bot.isFugitiveRunner;
+            bool combat = bot.IsAiming;
+            bool sprinting = curSpeed > 3.4f || bot.IsSprinting || bot.isFugitiveRunner;
             float reloadPose=bot.IsReloading?Mathf.Sin(bot.ReloadProgress*Mathf.PI):0f;
-            float ready = combat && !bot.IsReloading ? 1f : 0f;
+            float ready = aimBlend;
             
             // Tactical sway and pump
             float sway = moving ? (sprinting ? Mathf.Sin(phase * Mathf.PI * 2f) * 2.5f : Mathf.Sin(phase * Mathf.PI * 2f) * 1.2f) : Mathf.Sin(Time.time * 1.3f) * 0.4f;
             
             bool parentedToHand = enemyWeapon.parent != null && enemyWeapon.parent != modelRoot && enemyWeapon.parent != transform;
-            if (parentedToHand)
+            if (weaponAnchor!=null && weaponAnchor.enabled)
+            {
+                // The anchor solves both palm contacts later in LateUpdate.
+            }
+            else if (parentedToHand)
             {
                 // Weapon is attached directly to the right hand bone: preserve solid palm grip
                 enemyWeapon.localPosition = weaponRestPosition;
-                float readyPitch = ready * (-3f + sway)+reloadPose*19f;
+                float readyPitch = ready * (-3f + sway)+reloadPose*19f-shotPose*3f;
                 enemyWeapon.localRotation = weaponRestRotation * Quaternion.Euler(readyPitch, 0f, 0f);
             }
             else
@@ -340,7 +411,7 @@ namespace GeoSniper
                 enemyWeapon.localPosition = Vector3.Lerp(enemyWeapon.localPosition, targetLocalPos, Time.deltaTime * 8.5f);
                 
                 Quaternion lowReadyRot = weaponRestRotation * Quaternion.Euler(16f, -8f, 10f);
-                Quaternion combatReadyRot = weaponRestRotation * Quaternion.Euler(ready * (-2f + sway) + cover * 8f+reloadPose*19f, ready * 1.5f, ready * -2f);
+                Quaternion combatReadyRot = weaponRestRotation * Quaternion.Euler(ready * (-2f + sway) + cover * 8f+reloadPose*19f-shotPose*3f, ready * 1.5f, ready * -2f);
                 Quaternion targetRot = Quaternion.Slerp(lowReadyRot, combatReadyRot, ready);
                 
                 if (sprinting)
@@ -351,7 +422,7 @@ namespace GeoSniper
                 enemyWeapon.localRotation = Quaternion.Slerp(enemyWeapon.localRotation, targetRot, Time.deltaTime * 8.5f);
             }
             
-            if (weaponLeftHand != null && combat && !bot.IsReloading)
+            if (weaponLeftHand != null && combat && !bot.IsReloading && (weaponAnchor==null || !weaponAnchor.enabled))
             {
                 Vector3 foreEnd = enemyWeapon.TransformPoint(new Vector3(.20f, 0f, 0f));
                 Vector3 toForeEnd = foreEnd - weaponLeftHand.position;
@@ -360,12 +431,12 @@ namespace GeoSniper
             }
             if (leftArm != null && rightArm != null)
             {
-                float carry = combat ? 1f : .32f;
+                float carry = Mathf.Lerp(.32f,1f,ready);
                 float walkSway = moving ? Mathf.Sin(phase * Mathf.PI * 2f) * (sprinting ? 4f : 2f) : 0f;
                 leftArm.localRotation = Quaternion.Slerp(leftArm.localRotation,
-                    leftArmRest * Quaternion.AngleAxis((-6f - cover * 8f) * carry - walkSway-reloadPose*24f, leftArmAxis), Time.deltaTime * 6.5f);
+                    leftArmRest * Quaternion.AngleAxis((-6f - cover * 8f) * carry - walkSway-reloadPose*24f-hitPose*7f-shotPose*3f, leftArmAxis), Time.deltaTime * 6.5f);
                 rightArm.localRotation = Quaternion.Slerp(rightArm.localRotation,
-                    rightArmRest * Quaternion.AngleAxis((-4f - cover * 6f) * carry + walkSway * .35f, rightArmAxis), Time.deltaTime * 6.5f);
+                    rightArmRest * Quaternion.AngleAxis((-4f - cover * 6f) * carry + walkSway * .35f-hitPose*5f-shotPose*4f, rightArmAxis), Time.deltaTime * 6.5f);
             }
         }
 
@@ -422,79 +493,113 @@ namespace GeoSniper
             leg.Foot.localRotation = leg.FootRest * Quaternion.AngleAxis(-footAngle, footPitchAxis);
         }
 
+        Transform FindRagdollBone(params string[] tokens)
+        {
+            // Mesh objects can contain names such as Soldier_head; only deforming bones belong in the skeleton.
+            foreach(var token in tokens)
+                foreach(var skin in modelRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                    foreach(var bone in skin.bones)
+                    {
+                        if(bone==null)continue;
+                        string name=bone.name.ToLowerInvariant().Replace(":","").Replace("_","").Replace(".","");
+                        if(name.EndsWith(token.Replace("_","")))return bone;
+                    }
+            return null;
+        }
         public bool EnablePhysicalRagdoll(Vector3 impactDir, Vector3 impactPos)
         {
             if (modelRoot == null) return false;
 
-            Transform hips = FindBone("hips", "pelvis", "bip01", "root");
+            Transform hips = FindRagdollBone("hips", "pelvis", "bip01", "root");
             if (hips == null && left != null && left.Hip != null) hips = left.Hip.parent;
             if (hips == null) hips = modelRoot;
 
             Transform[] keyBones = new Transform[] {
                 hips,
-                spine,
-                FindBone("head", "neck"),
-                left != null ? left.Hip : null,
-                left != null ? left.Knee : null,
-                right != null ? right.Hip : null,
-                right != null ? right.Knee : null,
-                leftArm,
-                rightArm
+                FindRagdollBone("spine2", "spine1", "spine", "chest"),
+                FindRagdollBone("head", "neck"),
+                FindRagdollBone("leftupleg", "thigh_l", "leftthigh"),
+                FindRagdollBone("leftleg", "calf_l", "leftcalf"),
+                FindRagdollBone("rightupleg", "thigh_r", "rightthigh"),
+                FindRagdollBone("rightleg", "calf_r", "rightcalf"),
+                FindRagdollBone("leftarm", "upperarm_l"),
+                FindRagdollBone("rightarm", "upperarm_r"),
+                FindRagdollBone("leftforearm", "lowerarm_l"),
+                FindRagdollBone("rightforearm", "lowerarm_r"),
+                FindRagdollBone("leftfoot", "foot_l"),
+                FindRagdollBone("rightfoot", "foot_r")
             };
 
             bool addedAny = false;
             Rigidbody hipsRb = null;
+            var bones=new System.Collections.Generic.List<Transform>();
 
             foreach (var b in keyBones)
             {
-                if (b == null) continue;
+                if (b == null || bones.Contains(b)) continue;
+                bones.Add(b);
                 var col = b.GetComponent<Collider>();
                 if (col == null)
                 {
                     var sc = b.gameObject.AddComponent<SphereCollider>();
-                    sc.radius = (b == spine || b == hips) ? 0.22f : 0.13f;
+                    Vector3 scale=b.lossyScale;
+                    float boneScale=Mathf.Max(Mathf.Abs(scale.x),Mathf.Abs(scale.y),Mathf.Abs(scale.z));
+                    sc.radius = (b == hips ? 0.18f : 0.11f)/Mathf.Max(.0001f,boneScale);
                     col = sc;
                 }
                 col.enabled = true;
 
                 var rb = b.GetComponent<Rigidbody>();
                 if (rb == null) rb = b.gameObject.AddComponent<Rigidbody>();
-                rb.mass = (b == hips || b == spine) ? 18f : (b == leftArm || b == rightArm) ? 6f : 8f;
+                rb.mass = b == hips ? 18f : b==keyBones[1] ? 12f : 4f;
                 rb.interpolation = RigidbodyInterpolation.Interpolate;
-                rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
+                rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+                rb.linearDamping=.15f;rb.angularDamping=1.2f;rb.maxAngularVelocity=5f;
+                rb.solverIterations=12;rb.solverVelocityIterations=6;
                 rb.isKinematic = false;
 
                 if (b == hips) hipsRb = rb;
 
+                addedAny = true;
+            }
+            // Build joints after every body exists, including authored rigs which skip fallback gait setup.
+            foreach(var b in bones)
+            {
                 if (b != hips && b.parent != null)
                 {
                     var parentRb = b.parent.GetComponentInParent<Rigidbody>();
                     if (parentRb != null && b.GetComponent<Joint>() == null)
                     {
-                        var joint = b.gameObject.AddComponent<HingeJoint>();
+                        var joint = b.gameObject.AddComponent<CharacterJoint>();
                         joint.connectedBody = parentRb;
-                        joint.axis = Vector3.right;
-                        joint.useLimits = true;
-                        JointLimits limits = joint.limits;
-                        limits.min = -60f;
-                        limits.max = 60f;
-                        joint.limits = limits;
+                        joint.axis = b.InverseTransformDirection(transform.right);
+                        joint.swingAxis = b.InverseTransformDirection(transform.forward);
+                        joint.lowTwistLimit=new SoftJointLimit{limit=-25};
+                        joint.highTwistLimit=new SoftJointLimit{limit=25};
+                        joint.swing1Limit=new SoftJointLimit{limit=45};
+                        joint.swing2Limit=new SoftJointLimit{limit=30};
+                        joint.enableProjection=true;joint.projectionDistance=.08f;joint.projectionAngle=15;
                     }
                 }
 
-                addedAny = true;
             }
 
             if (addedAny)
             {
                 this.enabled = false;
+                var army=GetComponent<ArmyAnimation>();if(army!=null)army.enabled=false;
+                foreach(var animation in modelRoot.GetComponentsInChildren<Animation>(true)){animation.Stop();animation.enabled=false;}
+                foreach(var animator in modelRoot.GetComponentsInChildren<Animator>(true))animator.enabled=false;
+                // Overlapping neighboring bone spheres must not push the skeleton apart.
+                for(int a=0;a<bones.Count;a++)for(int b=a+1;b<bones.Count;b++)
+                    Physics.IgnoreCollision(bones[a].GetComponent<Collider>(),bones[b].GetComponent<Collider>());
                 var rootCol = GetComponent<Collider>();
                 if (rootCol != null) rootCol.enabled = false;
 
                 if (hipsRb != null)
                 {
-                    hipsRb.AddForce(impactDir * UnityEngine.Random.Range(240f, 360f) + Vector3.up * 115f, ForceMode.Impulse);
-                    hipsRb.AddTorque(UnityEngine.Random.insideUnitSphere * 180f, ForceMode.Impulse);
+                    hipsRb.AddForce(impactDir.normalized*9f, ForceMode.Impulse);
+                    hipsRb.AddTorque(Vector3.Cross(impactDir,Vector3.up)*.8f, ForceMode.Impulse);
                 }
                 return true;
             }

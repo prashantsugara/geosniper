@@ -20,12 +20,15 @@ namespace GeoSniper
         readonly Dictionary<(Material,Texture),Material> civilianMaterialCache=new Dictionary<(Material,Texture),Material>();
         readonly List<Material> ownedMaterials=new List<Material>();
         int ammo=20;
-        readonly int[] weaponAmmo = { -1, -1, -1 };
+        public int CurrentWeaponId => weapon!=null?weapon.CurrentWeaponIndex:1;
+        readonly int[] weaponAmmo = new int[WeaponCatalog.Count];
         bool rangeMode;
         float reloadTimer;
         float chamberTimer;
         List<Vector3> mapSpawns, rooftopSpawns;
         public List<Vector3> RooftopSpawns => rooftopSpawns;
+        public List<Vector3> MultiplayerGroundSpawns => GetInnerGroundPoints();
+        public static bool IsSupportedDuelPoint(Vector3 point) => SupportedStandingPoint(point);
         SniperPresentation weapon;
         BallisticsSystem ballistics;
         WeaponSway sway;
@@ -96,6 +99,7 @@ namespace GeoSniper
         readonly List<Vector3> contractVipPath = new List<Vector3>();
         int dailyTarget,dailyProgress;
         bool stageRewarded;
+        bool campaignReplay;
         bool stageRewardsDoubled;
         bool hasUsedAdRevive;
         bool victorySoundPlayed;
@@ -198,15 +202,17 @@ namespace GeoSniper
             var weaponConfig=weaponAsset!=null?Instantiate(weaponAsset):ScriptableObject.CreateInstance<WeaponConfig>();
             var ballisticsAsset=Resources.Load<BallisticsConfig>("BallisticsConfig");
             var ballisticsConfig=ballisticsAsset!=null?Instantiate(ballisticsAsset):ScriptableObject.CreateInstance<BallisticsConfig>();
-            int selectedWpn = Mathf.Clamp(PlayerPrefs.GetInt("GeoSniper.SelectedWeapon", 1),0,2);
+            WeaponCatalog.EnsureStarterLoadout();
+            int selectedWpn = WeaponCatalog.StartingSniper;
             if (!IsWeaponOwned(selectedWpn)) selectedWpn = IsWeaponOwned(1) ? 1 : 0;
             PlayerPrefs.SetInt("GeoSniper.SelectedWeapon", selectedWpn);
-            ApplyWeaponConfiguration(selectedWpn, ballisticsConfig, weaponConfig);
+            ApplyWeaponConfiguration(selectedWpn, ballisticsConfig, weaponConfig, MultiplayerDuel);
             for (int i=0;i<weaponAmmo.Length;i++) weaponAmmo[i]=-1;
 
             weapon.Config = weaponConfig;
             weapon.CurrentWeaponIndex = selectedWpn;
             weapon.Initialize(cameraView);
+            if(SectorWorld.ActiveFeatures!=null && SectorWorld.ActiveFeatures.Exists(f=>MapFeatureStyle.Text(f,"street_study")=="true") && cameraView.GetComponent<StreetStudyPresentation>()==null)cameraView.gameObject.AddComponent<StreetStudyPresentation>();
             
             if(sway==null) sway=gameObject.AddComponent<WeaponSway>();
             sway.config = weaponConfig;
@@ -294,6 +300,7 @@ namespace GeoSniper
             {
                 PlayHQDispatchSound();
                 EnsureMissionBillboard();
+                PrepareStrongholdEncounter();
             }
         }
         Vector3 ChooseStart(List<Vector3> candidates)
@@ -313,6 +320,7 @@ namespace GeoSniper
             AdManager.Instance?.HideNativeBillboardAd();
             mapOpen=true;
             mapBrowseCenter=player!=null?player.transform.position:Vector3.zero;
+            if(TryGetDuelMapRival(out var mapRival)) FocusDuelMap(mapRival.transform.position);
             mapDragging=false;
             foreach(var bot in enemies) if(bot!=null) bot.Suspended=true;
             // The in-game map owns pin selection on both desktop and touch devices.
@@ -331,6 +339,11 @@ namespace GeoSniper
         public void OnNativeMapFailed(string reason) { nativeMapOpen=false; }
         public void Restart()
         {
+            if (MultiplayerDuel)
+            {
+                GeoSniper.Duel.SniperDuelManager.Instance.LeaveDuel();
+                return;
+            }
             if(!restarting) { restarting=true; StartCoroutine(RestartNextFrame()); }
         }
         System.Collections.IEnumerator RestartNextFrame()
@@ -496,7 +509,7 @@ namespace GeoSniper
             return inside;
         }
 
-        void SpawnEnemy(int i, Vector3? position=null)
+        void SpawnEnemy(int i, Vector3? position=null,bool ensureRoofRoute=true)
         {
             Vector3 spawnPos;
             var world = SectorWorld.LoadedWorlds.Count > 0 ? SectorWorld.LoadedWorlds[0] : null;
@@ -538,7 +551,7 @@ namespace GeoSniper
             {
                 float groundY = world.Ground(spawnPos.x, spawnPos.z);
                 if (spawnPos.y < groundY + 0.06f) spawnPos.y = groundY + 0.12f;
-                if (spawnPos.y > groundY + 2.5f) world.EnsureRooftopStairs(spawnPos);
+                if (ensureRoofRoute && spawnPos.y > groundY + 2.5f) world.EnsureRooftopStairs(spawnPos);
             }
 
             var o=new GameObject("Fictional Patrol Human "+(i+1));
@@ -569,6 +582,7 @@ namespace GeoSniper
             var bot=o.AddComponent<EnemyBot>(); bot.Difficulty=difficulty; bot.Alerts=alerts;
             bot.ReportBodies = !stageMode || activeContract.Type == CampaignContractType.Stealth;
             bot.Initialize(player.transform,i); enemies.Add(bot);
+            bot.Actor.AllowExecutionHeadshots=!CampaignProgression.Armored(campaignNode);
             var animation=o.AddComponent<ArmyAnimation>();
             if(!animation.Initialize(bot,visualRoot))
             {
@@ -728,13 +742,14 @@ namespace GeoSniper
             var model=Instantiate(asset,holder,false).transform;
             var gripMarker=AssetCalibration.Marker(model,"Grip");
             var tipMarker=AssetCalibration.Marker(model,"Muzzle");
-            Renderer stock=null,barrel=null,trigger=null;
+            Renderer stock=null,barrel=null,trigger=null,magazineRenderer=null;
             foreach(var renderer in model.GetComponentsInChildren<Renderer>())
             {
                 string name=renderer.name.ToLowerInvariant();
                 if(name.StartsWith("stock")) stock=renderer;
                 if(name.StartsWith("barrel")) barrel=renderer;
                 if(name.StartsWith("trigger")) trigger=renderer;
+                if(name.StartsWith("clip") || name.StartsWith("magazine"))magazineRenderer=renderer;
                 // The supplied FBX has missing texture references. Keep valid
                 // textures, otherwise give its wood and metal separate finishes.
                 var materials=renderer.sharedMaterials;
@@ -752,12 +767,22 @@ namespace GeoSniper
                 if(direction.sqrMagnitude>.000001f)
                     model.localRotation=Quaternion.FromToRotation(direction.normalized,Vector3.forward)*model.localRotation;
             }
+            else if(stock!=null && barrel!=null)
+            {
+                Vector3 stockPoint=ImportedVisual.RendererBounds(holder,stock).center;
+                Vector3 barrelPoint=ImportedVisual.RendererBounds(holder,barrel).center;
+                Vector3 forward=(barrelPoint-stockPoint).normalized;
+                Vector3 up=magazineRenderer!=null?(stockPoint+barrelPoint)*.5f-ImportedVisual.RendererBounds(holder,magazineRenderer).center:Vector3.up;
+                up=Vector3.ProjectOnPlane(up,forward);
+                if(up.sqrMagnitude<.00001f)up=Vector3.ProjectOnPlane(Vector3.right,forward);
+                model.localRotation=Quaternion.Inverse(Quaternion.LookRotation(forward,up.normalized))*model.localRotation;
+            }
             else
             {
                 if(AssetCalibration.TryGet(model.name, out var profile))
-                    model.localRotation=Quaternion.Euler(profile.rotation);
+                    model.localRotation=Quaternion.Euler(profile.rotation)*model.localRotation;
                 else
-                    model.localRotation=Quaternion.Euler(0, 180f, 0);
+                    model.localRotation=Quaternion.Euler(0, 180f, 0)*model.localRotation;
             }
 
             var bounds=ImportedVisual.LocalBounds(holder);
@@ -1105,14 +1130,18 @@ namespace GeoSniper
                 o.transform.position=surface.point+Vector3.up*.12f;
             
             Transform visualRoot=o.transform;
-            var civAssets = ModelLibrary.Load("Civilians");
-            if(civAssets != null && civAssets.Length > 0)
+            string civilianBriefing=stageMode?CampaignStory.Get(stageIndex).briefing:null;
+            var civilianRole=CivilianAppearance.Role(i,i==99,civilianBriefing);
+            var roleModel=CivilianAppearance.Model(civilianRole,i,civilianBriefing);
+            var civAssets = roleModel==null?ModelLibrary.Load("Civilians"):null;
+            if(roleModel!=null || (civAssets != null && civAssets.Length > 0))
             {
-                var imported = civAssets[i % civAssets.Length];
+                var imported = roleModel??civAssets[i % civAssets.Length];
                 var visual = ImportedVisual.CreateEnemy(imported, o.transform);
                 ApplyCivilianMaterials(visual.transform);
                 ImportedVisual.ConfigureCharacterSurfaces(visual.transform);
                 visualRoot = visual.transform;
+                CivilianAppearance.AddRoleDetails(o.transform,visualRoot,civilianRole);
             }
             else
             {
@@ -1120,7 +1149,8 @@ namespace GeoSniper
             }
             
             var bot = o.AddComponent<CivilianBot>(); bot.Initialize(i); civilians.Add(bot);
-            var walk = o.AddComponent<EnemyWalkAnimator>(); walk.Initialize(bot, visualRoot);
+            var authored=o.AddComponent<CivilianAnimation>();
+            if(!authored.Initialize(bot,visualRoot)){Destroy(authored);var walk=o.AddComponent<EnemyWalkAnimator>();walk.Initialize(bot,visualRoot);}
             o.AddComponent<EnemyHitboxes>().Initialize(visualRoot);
         }
         
@@ -1159,6 +1189,7 @@ namespace GeoSniper
 
         void ApplyCivilianMaterials(Transform visual)
         {
+            if(CivilianAppearance.ApplySurfaces(visual))return;
             EnsureCivilianTextures();
             EnsureEnemyMaterials();
             string visualName = visual.name.ToLowerInvariant();
@@ -1230,6 +1261,7 @@ namespace GeoSniper
 
         void ApplyVehicleMaterials(Transform visual, bool isTank, bool isPolice)
         {
+            if(isPolice && !isTank){PoliceVehicleVisual.Apply(visual.gameObject);return;}
             if (carAtlasTex == null)
             {
                 carAtlasTex = Resources.Load<Texture2D>("Models/Cars/Textures/cars_0");
@@ -1527,6 +1559,7 @@ namespace GeoSniper
 
         public void BeginRange()
         {
+            ClearStrongholdEncounter();
             rangeMode = true;
             stageMode = false;
             isPvPDuel = false;
@@ -1534,11 +1567,12 @@ namespace GeoSniper
             currentMissionState = MissionState.None;
             player.Health.Invulnerable = true;
             foreach (var bot in enemies)
-                if (bot != null) { bot.ObservationPatrol = true; bot.ReportBodies = false; }
+                if (bot != null) { bot.ObservationPatrol = true; bot.PassiveTrainingTarget=true; bot.ReportBodies = false; }
         }
 
         public void BeginStage(int index)
         {
+            ClearStrongholdEncounter();
             RadioCommsChannel.ResetMissionDispatch();
             meeting=null;
             stageMode = true; stageIndex = Mathf.Clamp(index, 0, StageCount - 1);
@@ -1546,7 +1580,7 @@ namespace GeoSniper
             if(duelLaserLine!=null) duelLaserLine.enabled=false;
             ConfigureCampaign(CampaignNodeGraph.ForStage(stageIndex));
             activeContract = campaignNode!=null
-                ? new CampaignContract(stageIndex,campaignNode.contractType,campaignNode.title,campaignNode.briefing)
+                ? new CampaignContract(stageIndex,campaignNode.contractType,campaignNode.title,campaignNode.objective)
                 : CampaignContract.ForLevel(stageIndex);
             firstContact = null; contractSetupError = null; missionFailureReason=null; hasWaypointPin = false;
             if (player != null && player.Health != null)
@@ -1582,12 +1616,15 @@ namespace GeoSniper
                         SetupModeTargetIdentification();
                         break;
                     case CampaignContractType.Overwatch:
+                    case CampaignContractType.Rescue:
                         SetupModeOverwatch();
                         break;
                     case CampaignContractType.TimedInterception:
                         SetupModeTimedInterception();
                         break;
                     case CampaignContractType.Stealth:
+                    case CampaignContractType.EvidenceRecovery:
+                    case CampaignContractType.Sabotage:
                         SetupModeStealthSyndicate();
                         break;
                     case CampaignContractType.Escape:
@@ -1617,7 +1654,9 @@ namespace GeoSniper
                 return;
             }
             EnsurePlayableStageSpawns();
-            if (activeContract.Type == CampaignContractType.Overwatch) EnsureVipAmbushSpacing();
+            if (activeContract.Type == CampaignContractType.Overwatch || activeContract.Type == CampaignContractType.Rescue) EnsureVipAmbushSpacing();
+            PrepareStoryOperation();
+            if(contractSetupError!=null){FailMission(contractSetupError);if(player!=null)player.InputBlocked=true;return;}
 
             SpawnVehicles();
             if (player != null)
@@ -1632,7 +1671,10 @@ namespace GeoSniper
                 else if (enemies.Count > 0 && enemies[0] != null)
                     player.Face(enemies[0].transform.position);
             }
+            PrepareOpeningLesson();
+            PrepareOpeningOperation();
             EnsureMissionBillboard();
+            PrepareStrongholdEncounter();
         }
 
         string ValidateContractSetup()
@@ -1643,6 +1685,7 @@ namespace GeoSniper
                 case CampaignContractType.TargetIdentification:
                     return contractTarget == null ? "The marked target was not generated. Retry the mission." : null;
                 case CampaignContractType.Overwatch:
+                case CampaignContractType.Rescue:
                     return contractVIP == null || contractVipPath == null || contractVipPath.Count < 2
                         ? "The VIP route was not generated safely. Retry the mission." : null;
                 case CampaignContractType.TimedInterception:
@@ -2401,7 +2444,9 @@ namespace GeoSniper
 
         void ConfigureCampaign(LevelNode node)
         {
+            ResetStoryOperation();
             campaignNode=node;
+            campaignReplay=node!=null && CampaignNodeGraph.IsNodeCompleted(node.id);
             if(baselineDifficulty==null) baselineDifficulty=DifficultyProfile.Create(DifficultyProfile.Selected);
             if(difficulty!=null) Destroy(difficulty);
             difficulty=CampaignProgression.CreateProfile(baselineDifficulty,node);
@@ -2432,8 +2477,12 @@ namespace GeoSniper
             if(audioSource!=null)audioSource.volume=originalVolume;
         }
 
-        public void BeginPvPDuel(int nodeId = -1)
+        public bool MultiplayerDuel { get; private set; }
+
+        public void BeginPvPDuel(int nodeId = -1, bool multiplayer = false)
         {
+            ClearStrongholdEncounter();
+            MultiplayerDuel = multiplayer;
             RadioCommsChannel.ResetMissionDispatch();
             var node=CampaignNodeGraph.GetNode(nodeId);
             ConfigureCampaign(node!=null && node.isPvPDuel?node:null);
@@ -2453,7 +2502,7 @@ namespace GeoSniper
             fireCooldown = 0.5f;
             duelLockTimer = 0f;
             duelLevel = node != null ? Mathf.Clamp(node.difficultyTier / 3, 0, 3) : Mathf.Clamp(PlayerPrefs.GetInt("GeoSniper.DuelWins", 0), 0, 2);
-            shotNotice = "SNIPER DUEL: ELIMINATE THE AI RIVAL!";
+            shotNotice = multiplayer ? "MULTIPLAYER DUEL: WAITING FOR REAL PLAYER" : "SNIPER DUEL: ELIMINATE THE AI RIVAL!";
             shotNoticeTime = 4f;
             GameAnalyticsManager.TrackMissionStart(-1, "PvP_Duel", weapon != null ? weapon.CurrentWeaponIndex : 1);
             PlayHQDispatchSound();
@@ -2469,6 +2518,15 @@ namespace GeoSniper
             enemies.Clear(); countedDeaths.Clear();
             foreach (var civ in civilians) if (civ != null) { civ.gameObject.SetActive(false); Destroy(civ.gameObject); }
             civilians.Clear();
+
+            if (multiplayer)
+            {
+                duelRivalSniper = null;
+                duelRivalHome = Vector3.zero;
+                if (duelLaserLine != null) duelLaserLine.enabled = false;
+                if (player != null) player.InputBlocked = true;
+                return;
+            }
 
             Vector3 playerPos = Vector3.zero;
             Vector3 rivalPos = Vector3.zero;
@@ -2558,6 +2616,8 @@ namespace GeoSniper
                 // remains readable; later duels stop presenting a stationary target.
                 duelRivalSniper.health=100f;
                 duelRivalSniper.SetHealth(duelRivalSniper.health);
+                duelRivalSniper.Actor.CanSurrender=campaignNode!=null && campaignNode.id==9;
+                if(campaignNode!=null)duelRivalSniper.name=campaignNode.id==9?"GHOST":campaignNode.id==19?"WARDEN":campaignNode.id==29?"VIPER":campaignNode.id==39?"TITAN":"ECLIPSE";
 
                 var dir = player.transform.position - duelRivalSniper.transform.position;
                 dir.y = 0;
@@ -2577,6 +2637,51 @@ namespace GeoSniper
                 }
                 duelLaserLine.enabled = true;
             }
+        }
+
+        private int duelReloadWeapon = -1;
+
+        private void CompleteReloadAmmo()
+        {
+            int current=weapon!=null ? weapon.CurrentWeaponIndex : 1;
+            int loaded=MultiplayerDuel && duelReloadWeapon>=0 ? duelReloadWeapon : current;
+            int capacity=MultiplayerDuel ? WeaponCatalog.Get(loaded).Magazine : (weapon!=null ? weapon.MaxAmmo : 20);
+            weaponAmmo[loaded]=capacity;
+            if (loaded==current) ammo=capacity;
+            duelReloadWeapon=-1;
+        }
+
+        public void RestoreMultiplayerDuelAmmo(int rounds0, int rounds1, int rounds2, int pendingReload, float remaining, float cooldown)
+        {
+            if (!MultiplayerDuel) return;
+            int[] rounds=new int[WeaponCatalog.Count];for(int i=0;i<rounds.Length;i++)rounds[i]=WeaponCatalog.Get(i).Magazine;
+            rounds[0]=rounds0;rounds[1]=rounds1;rounds[2]=rounds2;
+            RestoreMultiplayerDuelAmmo(rounds,pendingReload,remaining,cooldown);
+        }
+        public void RestoreMultiplayerDuelAmmo(int[] rounds,int pendingReload,float remaining,float cooldown)
+        {
+            if(!MultiplayerDuel || rounds==null || rounds.Length!=WeaponCatalog.Count)return;
+            for(int i=0;i<rounds.Length;i++)weaponAmmo[i]=Mathf.Clamp(rounds[i],0,WeaponCatalog.Get(i).Magazine);
+            int selected=weapon!=null ? weapon.CurrentWeaponIndex : 1;
+            ammo=weaponAmmo[selected];
+            duelReloadWeapon=pendingReload;
+            reloadTimer=pendingReload>=0 ? remaining : 0;
+            chamberTimer=0; fireCooldown=cooldown;
+        }
+
+        public void ResetMultiplayerDuelRound()
+        {
+            if (weapon != null)
+            {
+                weapon.UseDuelStats = true;
+                if (ballistics != null && ballistics.config != null && weapon.Config != null)
+                    ApplyWeaponConfiguration(weapon.CurrentWeaponIndex, ballistics.config, weapon.Config, true);
+            }
+            for (int i = 0; i < weaponAmmo.Length; i++) weaponAmmo[i] = -1;
+            ammo = weapon != null ? weapon.MaxAmmo : 10;
+            reloadTimer = fireCooldown = chamberTimer = 0f;
+            duelReloadWeapon = -1;
+            currentMissionState = MissionState.InProgress;
         }
 
         public void DisableAIRivalForMultiplayer()
@@ -2627,6 +2732,7 @@ namespace GeoSniper
             }
             if (activeNode >= 0)
             {
+                campaignReplay=CampaignNodeGraph.IsNodeCompleted(activeNode);
                 CampaignNodeGraph.CompleteNode(activeNode);
             }
             if(stageMode) PlayerPrefs.SetInt("GeoSniper.StageUnlocked",Mathf.Max(PlayerPrefs.GetInt("GeoSniper.StageUnlocked",0),stageIndex+1));
@@ -2635,8 +2741,13 @@ namespace GeoSniper
             LevelNode node = (activeNode >= 0) ? CampaignNodeGraph.GetNode(activeNode) : null;
             if (node != null)
             {
-                rewardCash = node.rewardCash;
-                rewardXP = node.rewardXP;
+                rewardCash = CampaignProgression.RewardAmount(node.rewardCash,campaignReplay);
+                rewardXP = CampaignProgression.RewardAmount(node.rewardXP,campaignReplay);
+                if(StoryBonusEarned())
+                {
+                    rewardCash+=CampaignProgression.RewardAmount(Mathf.Max(20,node.rewardCash/10),campaignReplay);
+                    rewardXP+=CampaignProgression.RewardAmount(Mathf.Max(10,node.rewardXP/10),campaignReplay);
+                }
             }
             else if (isPvPDuel)
             {
@@ -2661,7 +2772,7 @@ namespace GeoSniper
             if (totalHeadshotsScored >= 2 || (hpPct >= 0.8f && missionDuration < 90f)) rewardStars++;
             rewardStars = Mathf.Clamp(rewardStars, 1, 3);
 
-            PlayerPrefs.SetInt("GeoSniper.XP",PlayerPrefs.GetInt("GeoSniper.XP",0)+rewardXP);
+            PlayerProgression.AddXP(rewardXP);
             PlayerPrefs.SetInt("GeoSniper.Credits",PlayerPrefs.GetInt("GeoSniper.Credits",0)+rewardCash);
             if(dailyProgress>=dailyTarget && PlayerPrefs.GetInt("GeoSniper.DailyClaimed",0)==0)
             {
@@ -2678,6 +2789,7 @@ namespace GeoSniper
         void TriggerMissionVictory(string title = "MISSION ACCOMPLISHED", string subtitle = "ALL THREATS ELIMINATED")
         {
             if (currentMissionState == MissionState.Complete || currentMissionState == MissionState.Failed || victoryPending) return;
+            player?.ExitAim();
             victoryHeader = title;
             victorySubheader = subtitle;
             victoryPending = true;
@@ -2689,6 +2801,7 @@ namespace GeoSniper
         void FailMission(string reason)
         {
             if (currentMissionState == MissionState.Failed) return;
+            player?.ExitAim();
             currentMissionState = MissionState.Failed;
             missionFailureReason=reason;
             victoryPending=false;
@@ -2711,10 +2824,8 @@ namespace GeoSniper
             victoryScreenTimer = 0f;
             AdManager.Instance?.HideNativeScreenAd();
 
-            if (player != null && player.Scoped)
-            {
-                player.ToggleScope();
-            }
+            player?.ExitAim();
+            weapon?.ResetAimPresentation();
             if (mapOpen) CloseMap();
             if (duelLaserLine != null) duelLaserLine.enabled = false;
 
@@ -2734,6 +2845,7 @@ namespace GeoSniper
 
         public void ExitToLevelMap()
         {
+            PlayerPrefs.DeleteKey("GeoSniper.RankUpFrom");PlayerPrefs.DeleteKey("GeoSniper.RankUpTo");
             showingDebriefing = false;
             AdManager.Instance?.HideNativeScreenAd();
             int activeNode = campaignNode!=null?campaignNode.id:-1;
@@ -2760,6 +2872,13 @@ namespace GeoSniper
             lastShotWasHeadshot = info.isHeadshot;
             if (info.isHeadshot) totalHeadshotsScored++;
             hitFlash = 0.25f;
+            if (MultiplayerDuel)
+            {
+                shotNotice = info.isHeadshot ? "RIVAL HEADSHOT" : "RIVAL HIT";
+                shotNoticeTime = .8f;
+                weapon?.ConfirmHit();
+                return;
+            }
             if (info.isHeadshot)
             {
                 shotNotice = "🎯 HEADSHOT! +200 XP";
@@ -2948,11 +3067,13 @@ namespace GeoSniper
 
         void TriggerAccolade(string title, string subtitle, int xpBonus)
         {
+            int originalBonus=xpBonus;
+            xpBonus=CampaignProgression.RewardAmount(xpBonus,campaignReplay);
+            subtitle=subtitle.Replace("+"+originalBonus+" XP","+"+xpBonus+" XP");
             accoladeTitle = title;
             accoladeSubtitle = subtitle;
             accoladeTimer = 2.8f;
-            int curXp = PlayerPrefs.GetInt("GeoSniper.XP", 0);
-            PlayerPrefs.SetInt("GeoSniper.XP", curXp + xpBonus);
+            PlayerProgression.AddXP(xpBonus);
             if (audioSource != null)
             {
                 audioSource.PlayOneShot(ProceduralAudio.CreateAccoladeStinger(), 0.85f);
@@ -3380,6 +3501,7 @@ namespace GeoSniper
         
         void Update()
         {
+            UpdateStrongholdEncounter();
             Input.backButtonLeavesApp = false;
             if(audioSource!=null && ambientMusic!=null && !audioSource.isPlaying && !restarting && Application.isFocused)
             { audioSource.clip=ambientMusic; audioSource.loop=true; audioSource.Play(); }
@@ -3485,11 +3607,13 @@ namespace GeoSniper
             if (!mapOpen && (currentMissionState == MissionState.InProgress || currentMissionState == MissionState.Extraction))
             {
                 missionDuration += Time.deltaTime;
+                TickOpeningLesson();TickEarlyFieldHint();
                 UpdateSoundMasking();
             }
             if (currentMissionState == MissionState.Complete)
             {
-                if (player != null && player.Scoped) player.ToggleScope();
+                player?.ExitAim();
+                weapon?.ResetAimPresentation();
                 victoryScreenTimer += Time.deltaTime;
                 if (!victorySoundPlayed)
                 {
@@ -3500,15 +3624,17 @@ namespace GeoSniper
             }
             foreach(var enemy in enemies) if(enemy!=null) enemy.Suspended=victoryPending || (isPvPDuel && enemy==duelRivalSniper) || mapOpen || restarting || (stageMode && currentMissionState!=MissionState.InProgress && currentMissionState!=MissionState.Extraction);
             foreach(var civ in civilians) if(civ!=null) civ.Suspended=mapOpen || restarting || (stageMode && currentMissionState!=MissionState.InProgress && currentMissionState!=MissionState.Extraction);
+            campaignAcoustics?.UpdateEnvironment(player,currentMissionState==MissionState.InProgress || currentMissionState==MissionState.Extraction,mapOpen || victoryPending || restarting,StoryNarrator.Playing(gameObject));
             UpdateMapZoom();
             if(player!=null)
             {
-                player.InputBlocked=victoryPending || mapOpen || currentMissionState == MissionState.Briefing || currentMissionState == MissionState.Complete || currentMissionState == MissionState.Failed || (!freeRoam && currentMissionState == MissionState.None && defeated>=enemies.Count && enemies.Count>0);
+                player.InputBlocked=(MultiplayerDuel && !GeoSniper.Duel.SniperDuelManager.Instance.CanPlay) || victoryPending || mapOpen || currentMissionState == MissionState.Briefing || currentMissionState == MissionState.Complete || currentMissionState == MissionState.Failed || (!freeRoam && currentMissionState == MissionState.None && defeated>=enemies.Count && enemies.Count>0);
                 player.Controls.enabled=!victoryPending && !mapOpen && currentMissionState != MissionState.Briefing && currentMissionState != MissionState.Complete && currentMissionState != MissionState.Failed;
                 player.Controls.DrawControlsInOnGUI=!victoryPending && !mapOpen && currentMissionState != MissionState.Briefing && currentMissionState != MissionState.Complete && currentMissionState != MissionState.Failed;
             }
             
             if(player==null || restarting)return;
+            if (MultiplayerDuel && GeoSniper.Duel.SniperDuelManager.Instance.ConnectionPaused) return;
             UpdateMeeting();
             if(MeetingMode && !meeting.ShotFired)
                 if(contractTarget!=null) contractTarget.Suspended=true;
@@ -3521,7 +3647,7 @@ namespace GeoSniper
             }
             MobileCombatInput.FLIRActive = weapon != null && weapon.ThermalMode;
             
-            if (player.Health.IsDead && currentMissionState != MissionState.Failed) {
+            if (player.Health.IsDead && currentMissionState != MissionState.Failed && !MultiplayerDuel) {
                 FailMission("OPERATIVE KILLED IN ACTION");
             }
             
@@ -3538,10 +3664,18 @@ namespace GeoSniper
                     bool counterSniperDead = (contractCounterSniper == null || contractCounterSniper.GetComponent<CombatActor>().IsDead);
                     if (hvtDead && counterSniperDead && currentMissionState == MissionState.InProgress)
                     {
-                        TriggerMissionVictory("HVT ELIMINATED", "ALL PRIMARY THREATS NEUTRALIZED");
-                        shotNotice = "TARGET ELIMINATED - CONTRACT COMPLETED!";
-                        shotNoticeTime = 3.5f;
+                        if(stageIndex==0)UpdateOpeningExtraction(Time.deltaTime);
+                        else
+                        {
+                            TriggerMissionVictory("HVT ELIMINATED", "ALL PRIMARY THREATS NEUTRALIZED");
+                            shotNotice = "TARGET ELIMINATED - CONTRACT COMPLETED!";
+                            shotNoticeTime = 3.5f;
+                        }
                     }
+                }
+                else if (StoryFieldMode)
+                {
+                    UpdateStoryField(Time.deltaTime);
                 }
                 else if (activeContract.Type == CampaignContractType.Overwatch)
                 {
@@ -3619,15 +3753,14 @@ namespace GeoSniper
 
             if (isPvPDuel && currentMissionState == MissionState.InProgress)
             {
-                if (GeoSniper.Duel.SniperDuelManager.Instance != null && GeoSniper.Duel.SniperDuelManager.Instance.Opponent != null)
+                if (MultiplayerDuel)
                 {
                     DisableAIRivalForMultiplayer();
-                    return;
                 }
-                if (duelRivalSniper != null && duelRivalSniper.GetComponent<CombatActor>().IsDead)
+                else if (duelRivalSniper != null && (duelRivalSniper.GetComponent<CombatActor>().IsDead || duelRivalSniper.Actor.Surrendered))
                 {
                     if(!stageRewarded) PlayerPrefs.SetInt("GeoSniper.DuelWins",PlayerPrefs.GetInt("GeoSniper.DuelWins",0)+1);
-                    TriggerMissionVictory("SNIPER DUEL WON", "RIVAL SNIPER ELIMINATED");
+                    TriggerMissionVictory(duelRivalSniper.Actor.Surrendered?"GHOST YIELDS":"SNIPER DUEL WON",duelRivalSniper.Actor.Surrendered?"RIVAL SURRENDERED // CHANNEL OPEN":"RIVAL SNIPER ELIMINATED");
                     shotNotice = "VICTORY! +$"+rewardCash+" CASH +"+rewardXP+" XP";
                     shotNoticeTime = 4f;
                 }
@@ -3681,13 +3814,13 @@ namespace GeoSniper
 
             if (player.InputBlocked || player.Health.IsDead)
             {
-                weapon?.Animate(true,Mathf.Max(reloadTimer,chamberTimer),false);
+                weapon?.Animate(false,reloadTimer,false);
                 if(sway!=null) sway.UpdateSway(false,false);
                 fireBufferTimer=0;
                 return;
             }
             bool isMoving = player != null && player.SpeedMetersPerSecond > 0.1f;
-            if(weapon!=null) weapon.Animate(mapOpen || (player!=null && player.Scoped), Mathf.Max(reloadTimer, chamberTimer), isMoving, player != null && player.Sprinting, player != null && player.IsCrouching, player != null ? player.SpeedMetersPerSecond : 0f);
+            if(weapon!=null) weapon.Animate(mapOpen || (player!=null && player.Scoped), reloadTimer, isMoving, player != null && player.Sprinting, player != null && player.IsCrouching, player != null ? player.SpeedMetersPerSecond : 0f);
             
             if (player != null && player.Scoped)
             {
@@ -3700,20 +3833,31 @@ namespace GeoSniper
             }
             
             if (sway != null) sway.UpdateSway(isMoving, !mapOpen && player.Scoped && player.IsHoldingBreath);
-            if(reloadTimer>0) { reloadTimer-=Time.deltaTime; if(reloadTimer<=0) ammo=weapon!=null?weapon.MaxAmmo:20; }
-            if(chamberTimer>0) { chamberTimer-=Time.deltaTime; }
-            if(!mapOpen && player.Controls!=null && (player.Controls.ReloadPressed || Input.GetKeyDown(KeyCode.R)) && ammo<(weapon!=null?weapon.MaxAmmo:20) && reloadTimer<=0 && chamberTimer<=0)
+            if (reloadTimer > 0)
             {
-                float reloadSeconds=weapon==null?1.4f:(weapon.CurrentWeaponIndex==0?2.2f:weapon.CurrentWeaponIndex==1?1.45f:1.1f);
+                reloadTimer -= Time.deltaTime;
+                if (reloadTimer <= 0)
+                {
+                    CompleteReloadAmmo();
+                }
+            }
+            if(chamberTimer>0) { chamberTimer-=Time.deltaTime; }
+            if(!mapOpen && player.Controls!=null && (player.Controls.ReloadPressed || Input.GetKeyDown(KeyCode.R)) && ammo<(weapon!=null?weapon.MaxAmmo:20) && reloadTimer<=0 && chamberTimer<=0 && (!MultiplayerDuel || fireCooldown<=0))
+            {
+                float reloadSeconds=weapon==null?1.4f:weapon.Config!=null?weapon.Config.reloadTime:WeaponProgression.ReloadSeconds(weapon.CurrentWeaponIndex,0);
                 reloadTimer=reloadSeconds; weapon?.ReloadSound(reloadSeconds);
+                if (MultiplayerDuel)
+                {
+                    duelReloadWeapon = weapon != null ? weapon.CurrentWeaponIndex : 1;
+                    GeoSniper.Duel.SniperDuelManager.Instance.NotifyLocalReload(duelReloadWeapon);
+                }
             }
             
             // Sync weapon dock from mobile/touch controls + keyboard hotkeys (1, 2, 3)
             if (player != null && !mapOpen && (player.Health == null || !player.Health.IsDead))
             {
-                if ((Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1)) && IsWeaponOwned(0)) SelectWeapon(0);
-                if ((Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2)) && IsWeaponOwned(1)) SelectWeapon(1);
-                if ((Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3)) && IsWeaponOwned(2)) SelectWeapon(2);
+                for(int i=0;i<WeaponCatalog.Count;i++)
+                    if((Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha1+i)) || Input.GetKeyDown((KeyCode)((int)KeyCode.Keypad1+i))) && IsWeaponOwned(i))SelectWeapon(i);
 
                 if (player.Controls != null)
                 {
@@ -3768,11 +3912,11 @@ namespace GeoSniper
                 }
             }
 
-            if (player != null && player.Controls != null && (player.Controls.FirePressed || player.Controls.FireHeld))
+            if (player != null && player.Controls != null && (player.Controls.FirePressed || (player.Controls.FireHeld && (weapon==null || weapon.CurrentWeaponIndex<3 || WeaponCatalog.Get(weapon.CurrentWeaponIndex).Automatic))))
             {
                 fireBufferTimer = 0.22f;
             }
-            if (!Application.isMobilePlatform && Input.touchCount == 0 && Input.GetMouseButtonDown(0) && (player == null || player.Controls == null || !player.Controls.IsPointerOverUI))
+            if (!Application.isMobilePlatform && Input.touchCount == 0 && (Input.GetMouseButtonDown(0) || (Input.GetMouseButton(0) && weapon!=null && WeaponCatalog.Get(weapon.CurrentWeaponIndex).Automatic)) && (player == null || player.Controls == null || !player.Controls.IsPointerOverUI))
             {
                 fireBufferTimer = 0.22f;
             }
@@ -3803,24 +3947,21 @@ namespace GeoSniper
         public void Fire()
         {
             if(BallisticsSystem.isBulletCamActive || ballistics==null || ballistics.config==null) return;
+            if (MultiplayerDuel && !GeoSniper.Duel.SniperDuelManager.Instance.CanPlay) return;
             if((stageMode && currentMissionState!=MissionState.InProgress && currentMissionState!=MissionState.Extraction) || mapOpen || fireCooldown>0 || reloadTimer>0 || chamberTimer>0 || ammo<=0 || player==null || player.Health==null || player.Health.IsDead || (player != null && player.BinocularsMode)) return;
             totalShotsFired++;
+            if(stageMode && totalShotsFired==1)
+                GameAnalyticsManager.TrackCustomEvent("mission_first_shot",new System.Collections.Generic.Dictionary<string,object>{{"stage_index",stageIndex+1},{"seconds_to_shot",Mathf.RoundToInt(missionDuration)},{"attempt_id",GameAnalyticsManager.CurrentDeploymentAttempt}});
             ammo--;
             int rifleIndex=weapon!=null?weapon.CurrentWeaponIndex:1;
-            chamberTimer = rifleIndex==1?1.05f:rifleIndex==0?.55f:.2f;
+            chamberTimer = WeaponCatalog.Get(rifleIndex).Cadence;
             if(FirstContactMode) firstContact?.Shot();
             fireCooldown = weapon?.Config != null ? weapon.Config.fireRate : 0.32f;
             
             shotNotice=""; shotNoticeTime=0;
-            player.ApplyRecoil(rifleIndex==0?140f:rifleIndex==1?95f:60f);
-            weapon?.OnShotFired();
+            player.ApplyRecoil(WeaponCatalog.Get(rifleIndex).Recoil*(weapon?.Config!=null?weapon.Config.recoilPitch/9f:1));
             ballistics?.Fire();
-            if (isPvPDuel && GeoSniper.Duel.SniperDuelManager.Instance != null && weapon != null)
-            {
-                var cam = cameraView != null ? cameraView : Camera.main;
-                Vector3 fwd = cam != null ? cam.transform.forward : Vector3.forward;
-                GeoSniper.Duel.SniperDuelManager.Instance.NotifyLocalGunshot(weapon.transform.position, fwd, rifleIndex);
-            }
+
         }
         static void SpawnHitSparks(Vector3 position)
         {
@@ -3903,6 +4044,7 @@ namespace GeoSniper
         {
             GUI.depth = -200;
             float s=Mathf.Max(.4f, Mathf.Min(Screen.height/720f, Screen.width/800f)); GUI.matrix=Matrix4x4.Scale(new Vector3(s,s,1)); float w=Screen.width/s,h=Screen.height/s;
+            Rect hudSafe = CombatHudPreferences.SafeCanvas(w,h);
             if (BallisticsSystem.isBulletCamActive)
             {
                 float t = Mathf.Clamp01(BallisticsSystem.bulletCamElapsed / 0.3f);
@@ -3932,10 +4074,7 @@ namespace GeoSniper
             }
             if (currentMissionState == MissionState.Complete)
             {
-                if (showingDebriefing)
-                    DrawMissionDebriefingScreen(w, h);
-                else
-                    DrawVictoryRewardScreen(w, h);
+                DrawVictoryRewardScreen(w, h);
                 return;
             }
             if (currentMissionState == MissionState.Failed)
@@ -3952,17 +4091,19 @@ namespace GeoSniper
             else if(!mapOpen && player!=null && player.Scoped)
             {
                 weapon?.DrawScope(w,h, ammo, reloadTimer > 0);
-                DrawScopeZoomSlider(w,h);
+                if(weapon!=null && weapon.UsesOptic) DrawScopeZoomSlider(w,h);
                 DrawDamageFeedback(w,h);
             }
             else if(!mapOpen)
             {
                 DrawScreenRain(w,h);
                 DrawDamageFeedback(w,h);
+                weapon?.DrawHitFeedback(w,h);
             }
             
             string targetLoc = GetTargetBuildingLocationName();
             string objText = "🎯 "+(stageMode && !FirstContactMode ? activeContract.Title.ToUpperInvariant() : "CONTRACT")+" NEAR " + targetLoc + " (" + defeated + " / " + enemies.Count + ")";
+            if(StoryFieldMode && stageMode)objText=StoryHudObjective();
             if (stageMode && activeContract.Type == CampaignContractType.TargetIdentification)
             {
                 string hvtStatus = (contractTarget != null && contractTarget.GetComponent<CombatActor>().IsDead) ? "DEAD" : "ALIVE";
@@ -3999,7 +4140,7 @@ namespace GeoSniper
             }
             if (currentMissionState == MissionState.Extraction) objText = "🚁 REACH DUSTOFF HELICOPTER LZ";
             if (currentMissionState == MissionState.Complete) objText = "🏆 MISSION COMPLETE - CONTRACT EXECUTED";
-            string header = stageMode ? StageTitle() + "  |  " + objText : freeRoam ? (rangeMode ? "GPS RANGE  |  " : "FREE ROAM SECTOR  |  ") + objText : objText;
+            string header = stageMode && CombatHudPreferences.TacticalDetails ? StageTitle() + " · " + objText : freeRoam ? (rangeMode ? "RANGE · " : "FREE ROAM · ") + objText : objText;
 
             if (isPvPDuel)
             {
@@ -4009,24 +4150,32 @@ namespace GeoSniper
                     : $"⚔️ PvP DUEL: 1v1 ROOFTOP SHOWDOWN  |  RIVAL DISTANCE: {rivalDist:0}m";
             }
 
+            if (MultiplayerDuel)
+            {
+                var duel = GeoSniper.Duel.SniperDuelManager.Instance;
+                header = duel.MatchState == GeoSniper.Duel.DuelMatchState.InRound
+                    ? "LIVE 1v1 // REAL PLAYER: " + GeoSniper.Duel.SniperDuelNetwork.Instance.RemoteCallsign
+                    : "MULTIPLAYER 1v1 // " + duel.MatchNotice.Replace("\n", " ");
+            }
+
             if(FirstContactMode) header=FirstContactObjective();
             if(MeetingMode && currentMissionState==MissionState.InProgress) header=MeetingObjective;
 
             // Top Header Objective Bar: Show ONLY informative text at top (hidden while scoped to keep optic clean)
-            if (player == null || !player.Scoped)
+            if (!MultiplayerDuel)
             {
-                Rect headerRect = new Rect(20, 8, w - 40, 32);
+                Rect headerRect = new Rect(hudSafe.x + 16, hudSafe.y + 8, StreetStudyActive?Mathf.Min(640,hudSafe.width*.72f):hudSafe.width - 32, StreetStudyActive?34:44);
                 TacticalGUI.DrawPanel(headerRect, new Color(0.04f, 0.08f, 0.12f, 0.88f), isPvPDuel ? Color.red : TacticalGUI.AccentCyan, 1.2f);
-                var headerStyle = GUIStyleCache.Get(12, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+                var headerStyle = GUIStyleCache.Get(StreetStudyActive?12:14, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white, true);
                 GUI.Label(headerRect, header, headerStyle);
             }
 
             if (isPvPDuel && currentMissionState == MissionState.InProgress && duelLockTimer > 0.4f)
             {
                 float lockPct = Mathf.Clamp01(duelLockTimer / Mathf.Max(3.2f, (difficulty!=null?difficulty.duelLockSeconds:3.5f)));
-                Rect lockRect = new Rect(w / 2 - 180, 62, 360, 24);
+                Rect lockRect = CombatHudPreferences.Clamp(new Rect(w / 2 - 200, hudSafe.y + 62, 400, 32),hudSafe);
                 TacticalGUI.DrawPanel(lockRect, new Color(0.25f, 0.05f, 0.05f, 0.92f), Color.red, 1.2f);
-                GUI.Label(lockRect, $"⚠️ RIVAL SNIPER LOCK: {lockPct * 100:0}% - SHOOT OR TAKE COVER!", GUIStyleCache.Get(11, FontStyle.Bold, TextAnchor.MiddleCenter, Color.yellow));
+                GUI.Label(lockRect, $"RIVAL LOCK {lockPct * 100:0}% · SHOOT OR TAKE COVER", GUIStyleCache.Get(14, FontStyle.Bold, TextAnchor.MiddleCenter, Color.yellow));
             }
             else if (!isPvPDuel && currentMissionState == MissionState.InProgress)
             {
@@ -4034,35 +4183,41 @@ namespace GeoSniper
                 if (activeRival != null && activeRival.Actor != null && !activeRival.Actor.IsDead && activeRival.IsAimingAtPlayer)
                 {
                     float rem = activeRival.CounterSniperLockRemaining;
-                    Rect lockRect = new Rect(w / 2 - 190, 62, 380, 24);
+                    Rect lockRect = CombatHudPreferences.Clamp(new Rect(w / 2 - 210, hudSafe.y + 62, 420, 32),hudSafe);
                     TacticalGUI.DrawPanel(lockRect, new Color(0.32f, 0.04f, 0.04f, 0.94f), Color.red, 1.4f);
                     float pulse = 0.8f + 0.2f * Mathf.Sin(Time.time * 16f);
                     GUI.color = new Color(1f, 0.85f, 0.2f, pulse);
-                    GUI.Label(lockRect, $"⚠️ COUNTER-SNIPER LOCK [{rem:F1}s] — CROUCH / TAKE COVER!", GUIStyleCache.Get(11, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(1f, 0.9f, 0.2f)));
+                    GUI.Label(lockRect, $"SNIPER LOCK · {rem:F1}s · CROUCH / COVER", GUIStyleCache.Get(14, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(1f, 0.9f, 0.2f)));
                     GUI.color = Color.white;
                 }
             }
 
-            // Bottom Player Status HUD (HP & Ammo, positioned neatly above the bottom weapon dock - hidden while scoped)
-            if (player == null || !player.Scoped)
+            // Health and reload information remain readable; critical health also survives zoom.
+            float hp = player == null || player.Health == null ? 0 : player.Health.Health;
+            bool scoped = player != null && player.Scoped;
+            if (!scoped || hp <= 35)
             {
-                float hp = player == null || player.Health == null ? 0 : player.Health.Health;
-                Rect hudRect = new Rect(w / 2f - 175, h - 76, 350, 24);
-                TacticalGUI.DrawPanel(hudRect, new Color(0.03f, 0.06f, 0.10f, 0.75f), TacticalGUI.ThemeBorder, 1.0f);
-
-                // HP Bar fill
-                TacticalGUI.DrawProgressBar(new Rect(hudRect.x + 6, hudRect.y + 4, 115, 16), hp / 100f, hp > 35 ? new Color(0.2f, 0.85f, 0.35f) : TacticalGUI.AccentRed, new Color(0.1f, 0.12f, 0.16f));
-                var barTextStyle = GUIStyleCache.Get(10, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
-                GUI.Label(new Rect(hudRect.x + 6, hudRect.y + 4, 115, 16), "❤️ " + Mathf.CeilToInt(hp) + "%", barTextStyle);
-
-                // Stance Badge
-                string stanceText = player != null ? (player.IsCrouching ? "CROUCH" : player.Sprinting ? "SPRINT" : "STAND") : "STAND";
-                Color stanceCol = player != null && player.IsCrouching ? TacticalGUI.AccentCyan : player != null && player.Sprinting ? TacticalGUI.AccentGold : new Color(0.7f, 0.8f, 0.9f);
-                TacticalGUI.DrawBadge(new Rect(hudRect.x + 128, hudRect.y + 4, 76, 16), stanceText, stanceCol, 9);
-
-                // Ammo counter label
-                string ammoStr = reloadTimer > 0 ? "⚡ RELOADING" : "AMMO " + ammo + " / " + (weapon!=null?weapon.MaxAmmo:20);
-                TacticalGUI.DrawBadge(new Rect(hudRect.x + 210, hudRect.y + 4, 134, 16), ammoStr, reloadTimer > 0 ? TacticalGUI.AccentGold : TacticalGUI.AccentCyan, 9);
+                Rect hudRect = scoped ? CombatHudPreferences.Clamp(new Rect(hudSafe.center.x - 90, hudSafe.yMax - 42, 180, 34),hudSafe)
+                    : CombatHudPreferences.PlayerStatus(hudSafe,MobileControlLayout.GetRect(MobileControl.WeaponDock));
+                if(StreetStudyActive && !scoped)hudRect.width=148;
+                TacticalGUI.DrawPanel(hudRect, new Color(.02f,.04f,.06f,.70f), hp <= 35 ? TacticalGUI.AccentRed : TacticalGUI.ThemeBorder, 1f);
+                float healthWidth = scoped ? hudRect.width - 12 : 136;
+                var healthRect = new Rect(hudRect.x + 6,hudRect.y + 7,healthWidth,20);
+                TacticalGUI.DrawProgressBar(healthRect,hp/100f,hp > 35 ? new Color(.2f,.8f,.35f) : TacticalGUI.AccentRed,new Color(.08f,.1f,.12f));
+                GUI.Label(healthRect,(hp <= 35 ? "LOW HP " : "HP ")+Mathf.CeilToInt(hp)+"%",GUIStyleCache.Get(CombatHudPreferences.StatusFont,FontStyle.Bold,TextAnchor.MiddleCenter,Color.white));
+                if (!scoped && !StreetStudyActive)
+                {
+                    string ammoStr = reloadTimer > 0 ? "RELOADING" : "AMMO " + ammo + " / " + (weapon!=null?weapon.MaxAmmo:20);
+                    float ammoX = hudRect.x + 152;
+                    if (CombatHudPreferences.TacticalDetails)
+                    {
+                        string stance = player != null && player.IsCrouching ? "CROUCH" : player != null && player.Sprinting ? "SPRINT" : "STAND";
+                        GUI.Label(new Rect(ammoX,hudRect.y,70,hudRect.height),stance,GUIStyleCache.Get(12,FontStyle.Bold,TextAnchor.MiddleCenter,Color.white));
+                        ammoX += 76;
+                    }
+                    GUI.Label(new Rect(ammoX,hudRect.y,hudRect.xMax-ammoX-6,hudRect.height),ammoStr,
+                        GUIStyleCache.Get(CombatHudPreferences.StatusFont,FontStyle.Bold,TextAnchor.MiddleCenter,reloadTimer>0 || ammo==0 ? TacticalGUI.AccentGold : TacticalGUI.AccentCyan));
+                }
             }
             GUI.color=Color.white;
             if(player==null || !player.Scoped)
@@ -4112,19 +4267,15 @@ namespace GeoSniper
                 }
             }
             
-            if(shotNoticeTime>0 && !mapOpen && (player == null || !player.Scoped))
+            if(shotNoticeTime>0 && !mapOpen && (player == null || !player.Scoped)
+                && (!MultiplayerDuel || GeoSniper.Duel.SniperDuelManager.Instance.NoticeTimer <= 0))
             {
-                float t = Mathf.Clamp01((1.4f - shotNoticeTime) / 0.15f);
-                float scaleAnim = 1.0f + Mathf.Sin(t * Mathf.PI) * 0.25f;
                 bool isHead = shotNotice.Contains("HEADSHOT");
-                Color txtColor = isHead ? new Color(1f, 0.25f, 0.15f) : new Color(1f, 0.85f, 0.2f);
-                
-                var noticeStyle = GUIStyleCache.Get(Mathf.RoundToInt(22 * scaleAnim), FontStyle.Bold, TextAnchor.MiddleCenter, txtColor);
-                
-                GUI.color = new Color(0, 0, 0, 0.8f);
-                GUI.Label(new Rect(w/2 - 198, h/2 + 30, 400, 38), shotNotice, noticeStyle);
-                GUI.color = Color.white;
-                GUI.Label(new Rect(w/2 - 200, h/2 + 28, 400, 38), shotNotice, noticeStyle);
+                Color txtColor = isHead ? new Color(1f,.35f,.25f) : new Color(1f,.9f,.6f);
+                Rect notice = CombatHudPreferences.Clamp(new Rect(hudSafe.center.x - 240,hudSafe.yMax - 206,480,44),hudSafe);
+                TacticalGUI.DrawPanel(notice,new Color(.02f,.03f,.04f,.7f),Color.clear,0);
+                GUI.Label(new Rect(notice.x+8,notice.y+2,notice.width-16,notice.height-4),shotNotice,
+                    GUIStyleCache.Get(16,FontStyle.Bold,TextAnchor.MiddleCenter,txtColor,true));
             }
             
             
@@ -4143,10 +4294,14 @@ namespace GeoSniper
             }
             if(!mapOpen && (player == null || !player.Scoped)) DrawMinimap(w,h);
             if(!mapOpen && (player == null || !player.Scoped)) Draw3DWaypointMarker(w,h);
+            DrawStrongholdEncounter(w,h);
             if(!mapOpen && (player == null || (!player.Scoped && !player.BinocularsMode)) && (stageMode && currentMissionState==MissionState.InProgress || HasAnyTaggedEnemies())) DrawTargetMarkers(w,h);
             if(!mapOpen && (player == null || !player.Scoped) && player!=null) DrawTacticalHUDButtons(w,h);
             if(FirstContactMode && (player == null || !player.Scoped)) DrawFirstContactHUD(w,h);
-            else if(!stageMode && freeRoam && player!=null && !player.Scoped && TacticalGUI.DrawButton(new Rect(15, 114, 220, 44), "🎯 START CONTRACT", true, 13)) BeginStage(0);
+            if(!mapOpen)DrawStoryFieldHUD(w,h);
+            if(!mapOpen)DrawExtractionHoldHUD(w,h);
+            if(!mapOpen)DrawInteriorGuide(w,h,hudSafe);
+            else if(!stageMode && freeRoam && player!=null && !player.Scoped && TacticalGUI.DrawButton(new Rect(hudSafe.x+14, CombatHudPreferences.UtilityDock(hudSafe).yMax+10, 220, 44), "START CONTRACT", true, 14)) BeginStage(0);
         }
 
         void DrawAccoladeBanner(float width, float height)
@@ -4202,7 +4357,7 @@ namespace GeoSniper
 
         void DrawScopeZoomSlider(float width, float height)
         {
-            float d = Mathf.Min(width, height) * 0.92f;
+            float d = ScopeOptics.Diameter(width,height);
             float scopeLeft = (width - d) * 0.5f;
 
             // Position immediately alongside the left flank of the circular scope
@@ -4227,10 +4382,10 @@ namespace GeoSniper
             if (weapon != null && weapon.Config != null && weapon.Config.zoomLevels != null && weapon.Config.zoomLevels.Length > 0)
             {
                 minFov = weapon.Config.zoomLevels[0];
-                maxFov = weapon.Config.zoomLevels[Mathf.Min(1, weapon.Config.zoomLevels.Length - 1)];
+                maxFov = weapon.Config.zoomLevels[weapon.Config.zoomLevels.Length - 1];
             }
-            float currentFov = Mathf.Lerp(minFov, maxFov, value);
-            float magMultiplier = Mathf.Clamp(65f / Mathf.Max(1f, currentFov), 1f, 16f);
+            float currentFov = cameraView!=null?cameraView.fieldOfView:ScopeOptics.ZoomFov(weapon!=null?weapon.Config:null,value);
+            float magMultiplier = ScopeOptics.Magnification(weapon!=null && weapon.Config!=null?weapon.Config.hipFOV:65,currentFov);
 
             Color oldColor = GUI.color;
 
@@ -4268,10 +4423,10 @@ namespace GeoSniper
                 GUI.DrawTexture(new Rect(trackX - 6f - (isMajor ? 6f : 3f), ty - 0.5f, isMajor ? 6f : 3f, 1.5f), Texture2D.whiteTexture);
 
                 // Small tick labels for major steps
-                if (isMajor && i > 0 && i < tickSteps)
+                if (CombatHudPreferences.TacticalDetails && isMajor && i > 0 && i < tickSteps)
                 {
-                    float stepFov = Mathf.Lerp(minFov, maxFov, t);
-                    float stepMag = Mathf.Clamp(65f / Mathf.Max(1f, stepFov), 1f, 16f);
+                    float stepFov = ScopeOptics.ZoomFov(weapon!=null?weapon.Config:null,t);
+                    float stepMag = ScopeOptics.Magnification(weapon!=null && weapon.Config!=null?weapon.Config.hipFOV:65,stepFov);
                     var tickStyle = GUIStyleCache.Get(8, FontStyle.Bold, TextAnchor.MiddleRight, new Color(0.55f, 0.70f, 0.85f, 0.60f));
                     GUI.Label(new Rect(trackX - 44f, ty - 8f, 32f, 16f), stepMag.ToString("0.#") + "X", tickStyle);
                 }
@@ -4305,265 +4460,12 @@ namespace GeoSniper
 
             // 7. Tactical Header & Footer Tags
             var tagStyle = GUIStyleCache.Get(8, FontStyle.Bold, TextAnchor.MiddleCenter, TacticalGUI.AccentCyan);
-            GUI.Label(new Rect(trackX - 45f, trackTop - 38f, 90f, 18f), "OPTIC ZOOM", tagStyle);
+            if (CombatHudPreferences.TacticalDetails) GUI.Label(new Rect(trackX - 45f, trackTop - 38f, 90f, 18f), "OPTIC ZOOM", tagStyle);
 
             var footStyle = GUIStyleCache.Get(8, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.55f, 0.68f, 0.80f, 0.7f));
-            GUI.Label(new Rect(trackX - 45f, trackTop + trackHeight + 18f, 90f, 18f), "SLIDE", footStyle);
+            if (CombatHudPreferences.TacticalDetails) GUI.Label(new Rect(trackX - 45f, trackTop + trackHeight + 18f, 90f, 18f), "SLIDE", footStyle);
 
             GUI.color = oldColor;
-        }
-
-        void DrawVictoryRewardScreen(float w, float h)
-        {
-            // Fullscreen dark backdrop
-            GUI.color = new Color(0.02f, 0.04f, 0.07f, 0.94f);
-            GUI.DrawTexture(new Rect(0, 0, w, h), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
-            // Ambient central golden radiance glow
-            TacticalGUI.DrawGlow(new Rect(w / 2f - 320f, h / 2f - 240f, 640f, 480f), new Color(1f, 0.72f, 0.1f, 0.12f));
-
-            float modalW = Mathf.Min(560f, w - 24f);
-            float modalH = Mathf.Min(525f, h - 20f);
-            Rect modalRect = new Rect((w - modalW) / 2f, (h - modalH) / 2f, modalW, modalH);
-
-            // Modal card with glowing gold tactical border
-            TacticalGUI.DrawPanel(modalRect, new Color(0.06f, 0.09f, 0.14f, 0.97f), TacticalGUI.AccentGold, 2.2f);
-
-            float mx = modalRect.x;
-            float my = modalRect.y;
-
-            // --- 1. STARS RATING BANNER ---
-            float starT = victoryScreenTimer;
-            string s1 = starT >= 0.15f ? "★" : "☆";
-            string s2 = (rewardStars >= 2 && starT >= 0.40f) ? "★" : "☆";
-            string s3 = (rewardStars >= 3 && starT >= 0.65f) ? "★" : "☆";
-
-            var starStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 32,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = TacticalGUI.AccentGold }
-            };
-            Rect starsRect = new Rect(mx, my + 14, modalW, 38);
-            GUI.Label(starsRect, $"{s1}   {s2}   {s3}", starStyle);
-
-            // --- 2. HEADER TITLE & SUBHEADER ---
-            var titleStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 24,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = Color.white }
-            };
-            GUI.Label(new Rect(mx + 16, my + 54, modalW - 32, 32), victoryHeader, titleStyle);
-
-            var subStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 12,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = TacticalGUI.AccentCyan }
-            };
-            GUI.Label(new Rect(mx + 16, my + 86, modalW - 32, 20), victorySubheader.ToUpperInvariant(), subStyle);
-
-            // Decorative separator line
-            TacticalGUI.DrawLine(new Vector2(mx + 30, my + 112), new Vector2(mx + modalW - 30, my + 112), new Color(0.25f, 0.40f, 0.55f, 0.65f), 1.5f);
-
-            // --- 3. JUICY REWARD CARDS (Side by Side) ---
-            float cardY = my + 120;
-            float cardGap = 12f;
-            float cardW = (modalW - 36 - cardGap) / 2f;
-            float cardH = 88f;
-
-            // Cash Reward Card (Green Theme)
-            Rect cashRect = new Rect(mx + 18, cardY, cardW, cardH);
-            TacticalGUI.DrawPanel(cashRect, new Color(0.04f, 0.12f, 0.07f, 0.94f), new Color(0.20f, 0.85f, 0.35f, 0.90f), 1.8f);
-
-            var rewardLabelStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 11,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(0.45f, 0.90f, 0.55f) }
-            };
-            GUI.Label(new Rect(cashRect.x, cashRect.y + 8, cashRect.width, 18), "💵 BOUNTY REWARD", rewardLabelStyle);
-
-            var cashValStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 25,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(0.35f, 1.0f, 0.45f) }
-            };
-            GUI.Label(new Rect(cashRect.x, cashRect.y + 28, cashRect.width, 34), "+$" + rewardCash, cashValStyle);
-
-            var cardSubStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 9,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(0.55f, 0.70f, 0.60f, 0.80f) }
-            };
-            GUI.Label(new Rect(cashRect.x, cashRect.y + 64, cashRect.width, 16), "CREDITED TO BANK", cardSubStyle);
-
-            // XP Reward Card (Gold Theme)
-            Rect xpRect = new Rect(mx + 18 + cardW + cardGap, cardY, cardW, cardH);
-            TacticalGUI.DrawPanel(xpRect, new Color(0.14f, 0.11f, 0.04f, 0.94f), TacticalGUI.AccentGold, 1.8f);
-
-            var xpLabelStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 11,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(1.0f, 0.82f, 0.35f) }
-            };
-            GUI.Label(new Rect(xpRect.x, xpRect.y + 8, xpRect.width, 18), "⭐ TACTICAL XP", xpLabelStyle);
-
-            var xpValStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 25,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(1.0f, 0.85f, 0.20f) }
-            };
-            GUI.Label(new Rect(xpRect.x, xpRect.y + 28, xpRect.width, 34), "+" + rewardXP + " XP", xpValStyle);
-
-            var xpSubStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 9,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(0.85f, 0.75f, 0.50f, 0.80f) }
-            };
-            GUI.Label(new Rect(xpRect.x, xpRect.y + 64, xpRect.width, 16), "OPERATIVE MASTERY", xpSubStyle);
-
-            // --- 4. COMBAT TELEMETRY STATS STRIP ---
-            float statY = cardY + cardH + 12;
-            Rect statsRect = new Rect(mx + 18, statY, modalW - 36, 68);
-            TacticalGUI.DrawPanel(statsRect, new Color(0.04f, 0.06f, 0.09f, 0.90f), TacticalGUI.ThemeBorder, 1.2f);
-
-            float colW = statsRect.width / 4f;
-            int acc = totalShotsFired > 0 ? Mathf.Clamp(Mathf.RoundToInt((float)totalHitsScored / totalShotsFired * 100f), 0, 100) : 100;
-            int playerHp = (player != null && player.Health != null) ? Mathf.CeilToInt(player.Health.Health) : 100;
-            int timeSec = Mathf.CeilToInt(missionDuration);
-
-            string[] statHeaders = { "🎯 ACCURACY", "💀 HEADSHOTS", "❤️ VITALITY", "⏱️ TIME" };
-            string[] statValues = { acc + "%", totalHeadshotsScored.ToString(), playerHp + "%", $"{timeSec / 60:D2}:{timeSec % 60:D2}" };
-            Color[] statColors = { acc >= 70 ? TacticalGUI.AccentCyan : Color.white, totalHeadshotsScored > 0 ? TacticalGUI.AccentGold : Color.white, playerHp > 40 ? new Color(0.35f, 0.95f, 0.45f) : TacticalGUI.AccentRed, Color.white };
-
-            for (int i = 0; i < 4; i++)
-            {
-                float colX = statsRect.x + i * colW;
-                var colHdr = new GUIStyle(GUI.skin.label) { fontSize = 10, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(0.6f, 0.7f, 0.82f) } };
-                GUI.Label(new Rect(colX, statsRect.y + 10, colW, 16), statHeaders[i], colHdr);
-
-                var colVal = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, normal = { textColor = statColors[i] } };
-                GUI.Label(new Rect(colX, statsRect.y + 30, colW, 26), statValues[i], colVal);
-
-                if (i < 3)
-                {
-                    GUI.color = new Color(0.2f, 0.3f, 0.4f, 0.4f);
-                    GUI.DrawTexture(new Rect(colX + colW - 1, statsRect.y + 12, 1, 44), Texture2D.whiteTexture);
-                    GUI.color = Color.white;
-                }
-            }
-
-            if (totalHeadshotsScored > 0)
-            {
-                Rect bonusRect = new Rect(mx + 18, statY + 72, modalW - 36, 18);
-                TacticalGUI.DrawBadge(bonusRect, $"PRECISION SHOTS: {totalHeadshotsScored} HEADSHOTS", TacticalGUI.AccentGold, 10);
-            }
-
-            // --- 5. ACTION BUTTONS ---
-            float btnY = my + modalH - 120;
-
-            // Rewarded 2X Payout Button
-            Rect adDoubleRect = new Rect(mx + 22, btnY - 56, modalW - 44, 48);
-            if (!stageRewardsDoubled)
-            {
-                if (TacticalGUI.DrawButton(adDoubleRect, $"🎬 2X REWARDS (+${rewardCash:N0} CASH  |  +{rewardXP} XP)", true, 13))
-                {
-                    AdManager.Instance.ShowRewardedAd((success) =>
-                    {
-                        if (success)
-                        {
-                            stageRewardsDoubled = true;
-                            PlayerPrefs.SetInt("GeoSniper.Credits", PlayerPrefs.GetInt("GeoSniper.Credits", 0) + rewardCash);
-                            PlayerPrefs.SetInt("GeoSniper.XP", PlayerPrefs.GetInt("GeoSniper.XP", 0) + rewardXP);
-                            PlayerPrefs.Save();
-                            rewardCash *= 2;
-                            rewardXP *= 2;
-                        }
-                    }, "victory_double_reward");
-                }
-            }
-            else
-            {
-                TacticalGUI.DrawBadge(adDoubleRect, "✅ 2X COMBAT REWARDS APPLIED & DEPOSITED", TacticalGUI.AccentGold, 11);
-            }
-
-            Rect claimRect = new Rect(mx + 22, btnY, modalW - 44, 52);
-            if (TacticalGUI.DrawGreenPlayButton(claimRect, "CLAIM & CONTINUE ▶"))
-            {
-                if (AdManager.Instance != null && AdManager.Instance.IsNativeBillboardAdLoaded)
-                {
-                    showingDebriefing = true;
-                    AdManager.Instance.ShowNativeScreenAd(GoogleMobileAds.Api.AdPosition.Top);
-                }
-                else
-                {
-                    AdManager.Instance?.HideNativeScreenAd();
-                    AdManager.Instance?.NotifyStageCompleted();
-                    AdManager.Instance?.ShowInterstitialIfReady(() => { ExitToLevelMap(); }, "stage_transition");
-                }
-            }
-
-            Rect replayRect = new Rect(mx + 22, btnY + 58, modalW - 44, 42);
-            if (TacticalGUI.DrawButton(replayRect, "↺ REPLAY MISSION", false, 12))
-            {
-                showingDebriefing = false;
-                AdManager.Instance?.HideNativeScreenAd();
-                if (stageMode) BeginStage(stageIndex);
-                else Restart();
-            }
-        }
-
-        void DrawMissionDebriefingScreen(float w, float h)
-        {
-            // Fullscreen dark tactical backdrop
-            GUI.color = new Color(0.02f, 0.04f, 0.07f, 0.98f);
-            GUI.DrawTexture(new Rect(0, 0, w, h), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
-            // Ambient central golden radiance glow
-            TacticalGUI.DrawGlow(new Rect(w / 2f - 300f, h / 2f - 180f, 600f, 360f), new Color(1f, 0.72f, 0.1f, 0.09f));
-
-            // Lower confirmation & proceed card
-            float panelW = Mathf.Min(620f, w - 24f);
-            float panelH = 100f;
-            float panelY = h - panelH - 14f;
-            Rect panelRect = new Rect((w - panelW) / 2f, panelY, panelW, panelH);
-            TacticalGUI.DrawPanel(panelRect, new Color(0.06f, 0.09f, 0.14f, 0.97f), TacticalGUI.AccentGold, 2.0f);
-
-            var infoStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 12,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = new Color(0.70f, 0.85f, 0.98f) }
-            };
-            GUI.Label(new Rect(panelRect.x + 10, panelRect.y + 8, panelRect.width - 20, 18), "🎯 CONTRACT SIGN-OFF // SPONSOR INTEL VERIFIED", infoStyle);
-
-            Rect proceedRect = new Rect(panelRect.x + 30, panelRect.y + 32, panelRect.width - 60, 54);
-            if (TacticalGUI.DrawGreenPlayButton(proceedRect, "PROCEED TO BASE ▶"))
-            {
-                showingDebriefing = false;
-                AdManager.Instance?.HideNativeScreenAd();
-                AdManager.Instance?.NotifyStageCompleted();
-                AdManager.Instance?.ShowInterstitialIfReady(() => { ExitToLevelMap(); }, "stage_transition");
-            }
         }
 
         string FailureGuidance()
@@ -4575,6 +4477,9 @@ namespace GeoSniper
             else if(!stageMode)objective="Eliminate the remaining hostiles. Use cover and reload before moving into the open.";
             else switch(activeContract.Type)
             {
+                case CampaignContractType.EvidenceRecovery: objective="Find marked documents on desks inside accessible buildings. Tap PICK UP DOCUMENTS or hold E and stay close until they are secured. Collect them all, then reach the green extraction marker.";break;
+                case CampaignContractType.Sabotage: objective="Follow the map markers to relays inside buildings. Tap SWITCH OFF RELAY or hold E near the panel for three seconds. Guards converge after shutdowns. Switch off every relay, then reach the green exit marker.";break;
+                case CampaignContractType.Rescue: objective="Reach the witness and release them by staying close for three seconds. Then protect their run to extraction.";break;
                 case CampaignContractType.Overwatch: objective="Keep the VIP alive until they reach extraction. Prioritize enemies firing at the VIP.";break;
                 case CampaignContractType.TimedInterception: objective="Eliminate the marked courier before the timer expires or they reach the exit. Lead the moving target; guards are secondary.";break;
                 case CampaignContractType.Stealth: objective="Eliminate every sentry before the alert reaches "+(difficulty!=null?difficulty.stealthAlertLimit:4)+". Break line of sight and engage isolated guards.";break;
@@ -4686,10 +4591,13 @@ namespace GeoSniper
         void DrawTacticalHUDButtons(float width, float height)
         {
             // Vertical Tactical Action Dock on Left Edge (Well below the top header text bar, above bottom controls)
-            float dockX = 14f;
-            float dockY = 48f;
-            float btnW = 76f;
-            float btnH = 28f;
+            Rect safe = CombatHudPreferences.SafeCanvas(width,height);
+            if(StreetStudyActive){DrawStreetStudyTools(safe,width,height);return;}
+            Rect dock = CombatHudPreferences.UtilityDock(safe);
+            float dockX = dock.x;
+            float dockY = dock.y;
+            float btnW = dock.width;
+            float btnH = 36f;
             float spacing = 6f;
 
             // 1. Mission Abort Button
@@ -4704,30 +4612,30 @@ namespace GeoSniper
 
             // 2. FLIR Thermal Vision
             bool thermalOn = weapon != null && weapon.ThermalMode;
-            string thermLabel = thermalOn ? "🔥 FLIR" : "❄️ FLIR";
-            if (TacticalGUI.DrawButton(new Rect(dockX, dockY + (btnH + spacing) * 1, btnW, btnH), thermLabel, thermalOn, 10))
+            string thermLabel = thermalOn ? "FLIR ON" : "FLIR";
+            if (TacticalGUI.DrawButton(new Rect(dockX, dockY + (btnH + spacing) * 1, btnW, btnH), thermLabel, thermalOn, 13))
             {
                 ToggleThermalMode();
             }
 
             // 3. UAV Recon Scan
-            string uavLabel = uavTimer > 0 ? "🛰️ SCAN" : uavCooldown > 0 ? $"🛰️ {Mathf.CeilToInt(uavCooldown)}s" : "🛰️ UAV";
-            if (TacticalGUI.DrawButton(new Rect(dockX, dockY + (btnH + spacing) * 2, btnW, btnH), uavLabel, uavTimer > 0, 10))
+            string uavLabel = uavTimer > 0 ? "UAV ACTIVE" : uavCooldown > 0 ? $"UAV {Mathf.CeilToInt(uavCooldown)}s" : "UAV";
+            if (TacticalGUI.DrawButton(new Rect(dockX, dockY + (btnH + spacing) * 2, btnW, btnH), uavLabel, uavTimer > 0, 13))
             {
                 TriggerUAVRecon();
             }
 
             // 4. Environment / Weather Cycle
-            string envLabel = envState == 0 ? "☀️ DAY" : envState == 1 ? "🌙 NIGHT" : envState == 2 ? "🌧️ RAIN" : "⛈️ STORM";
-            if (TacticalGUI.DrawButton(new Rect(dockX, dockY + (btnH + spacing) * 3, btnW, btnH), envLabel, false, 10))
+            string envLabel = envState == 0 ? "DAY" : envState == 1 ? "NIGHT" : envState == 2 ? "RAIN" : "STORM";
+            if (TacticalGUI.DrawButton(new Rect(dockX, dockY + (btnH + spacing) * 3, btnW, btnH), envLabel, false, 13))
             {
                 CycleEnvironment();
             }
 
             // 5. Recon Rangefinder / Binoculars
             bool binosOn = player != null && player.BinocularsMode;
-            string reconLabel = binosOn ? "🔭 ON" : "🔭 RECON";
-            if (TacticalGUI.DrawButton(new Rect(dockX, dockY + (btnH + spacing) * 4, btnW, btnH), reconLabel, binosOn, 10))
+            string reconLabel = binosOn ? "RECON ON" : "RECON";
+            if (TacticalGUI.DrawButton(new Rect(dockX, dockY + (btnH + spacing) * 4, btnW, btnH), reconLabel, binosOn, 13))
             {
                 if (player != null) player.ToggleBinoculars();
                 shotNotice = (player != null && player.BinocularsMode) ? "🔭 RECON BINOCULARS ACTIVATED" : "RECON MODE DEACTIVATED";
@@ -4738,11 +4646,12 @@ namespace GeoSniper
             // Sound Masking Banner
             if (IsSoundMasked)
             {
-                Rect maskRect = new Rect(width / 2 - 225, 78, 450, 24);
+                Rect maskRect = MultiplayerDuel ? CombatHudPreferences.Clamp(new Rect(dock.x,dock.yMax+8,220,28),safe)
+                    : CombatHudPreferences.Clamp(new Rect(safe.center.x - 190,safe.y+102,380,28),safe);
                 TacticalGUI.DrawPanel(maskRect, new Color(0.04f, 0.20f, 0.08f, 0.92f), new Color(0.2f, 0.95f, 0.35f), 1.2f);
                 float pulse = 0.85f + 0.15f * Mathf.Sin(Time.time * 8f);
                 GUI.color = new Color(0.3f, 1f, 0.45f, pulse);
-                GUI.Label(maskRect, $"🔊 ACOUSTIC MASK: {activeSoundMaskName.ToUpperInvariant()} ({Mathf.CeilToInt(activeSoundMaskTimer)}s) — SHOTS SILENCED", new GUIStyle(GUI.skin.label) { fontSize = 11, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(0.35f, 1f, 0.5f) } });
+                GUI.Label(maskRect, CombatHudPreferences.TacticalDetails ? $"{activeSoundMaskName.ToUpperInvariant()} · SILENCED {Mathf.CeilToInt(activeSoundMaskTimer)}s" : $"SHOTS MASKED · {Mathf.CeilToInt(activeSoundMaskTimer)}s", new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(0.35f, 1f, 0.5f) } });
                 GUI.color = Color.white;
             }
 
@@ -4750,7 +4659,9 @@ namespace GeoSniper
             if (uavTimer > 0)
             {
                 GUI.color = new Color(0f, 0.9f, 1f, 0.85f);
-                GUI.Label(new Rect(width / 2 - 150, 50, 300, 24), $"🛰️ UAV RECON SWEEP ACTIVE ({Mathf.CeilToInt(uavTimer)}s)", new GUIStyle(GUI.skin.label) { fontSize = 12, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.cyan } });
+                Rect scanRect = MultiplayerDuel ? CombatHudPreferences.Clamp(new Rect(dock.x,dock.yMax+42,220,28),safe)
+                    : CombatHudPreferences.Clamp(new Rect(safe.center.x-160,safe.y+136,320,28),safe);
+                GUI.Label(scanRect, $"UAV SCAN · {Mathf.CeilToInt(uavTimer)}s", new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.cyan } });
                 GUI.color = Color.white;
                 DrawUAVMarkers(width,height);
             }
@@ -5124,14 +5035,9 @@ namespace GeoSniper
             shotNoticeTime = 2.5f;
         }
 
-        static void ApplyWeaponConfiguration(int index, BallisticsConfig ballistic, WeaponConfig presentation)
+        static void ApplyWeaponConfiguration(int index, BallisticsConfig ballistic, WeaponConfig presentation, bool duel = false)
         {
-            float damage = index == 0 ? 120f : index == 1 ? 85f : 45f;
-            ballistic.baseDamage = damage * (1f + Mathf.Clamp(PlayerPrefs.GetInt("GeoSniper.WpnDmgLvl_" + index, 0),0,2) * .2f);
-            ballistic.noiseRadius = index == 2 ? 25f : 130f;
-            float zoom = Mathf.Max(3f, (index == 0 ? 10f : index == 1 ? 14f : 18f)
-                - Mathf.Clamp(PlayerPrefs.GetInt("GeoSniper.WpnScopeLvl_" + index, 0),0,2) * 3.5f);
-            presentation.zoomLevels = new[] { zoom, zoom * .5f };
+            WeaponProgression.Apply(index,ballistic,presentation,duel);
         }
 
         void SelectWeapon(int index)
@@ -5144,7 +5050,7 @@ namespace GeoSniper
                 return;
             }
             weaponAmmo[weapon.CurrentWeaponIndex] = ammo;
-            ApplyWeaponConfiguration(index, ballistics.config, weapon.Config);
+            ApplyWeaponConfiguration(index, ballistics.config, weapon.Config, MultiplayerDuel);
             weapon.EquipWeaponModel(index);
             ammo = weaponAmmo[index] < 0 ? weapon.MaxAmmo : Mathf.Min(weaponAmmo[index], weapon.MaxAmmo);
             fireCooldown = Mathf.Max(fireCooldown, .25f);
@@ -5158,8 +5064,7 @@ namespace GeoSniper
         }
         bool IsWeaponOwned(int index)
         {
-            if (GeoSniperGame.IsDebugMode) return index >= 0 && index < 3;
-            return index >= 0 && index < 3 && PlayerPrefs.GetInt("GeoSniper.WeaponUnlocked_" + index, index == 1 ? 1 : 0) == 1;
+            return WeaponCatalog.Owned(index);
         }
 
         void CycleEnvironment()
@@ -5174,6 +5079,7 @@ namespace GeoSniper
         {
             bool isNight = (envState == 1 || envState == 3);
             bool isRain = (envState == 2 || envState == 3);
+            MobilePostProcess.Ensure(cameraView ?? Camera.main)?.ApplyEnvironment(isNight, isRain);
 
             SectorStreetLighting.SetNight(isNight, 0f);
             MobileGraphics.Apply();
@@ -5195,14 +5101,14 @@ namespace GeoSniper
 
             if (envState == 0) // CRISP DAYLIGHT
             {
-                sunIntensity = 1.45f;
-                sunColor = new Color(1.0f, 0.95f, 0.86f);
-                sunRot = Quaternion.Euler(46f, 138f, 0f);
+                sunIntensity = 1.10f;
+                sunColor = new Color(1.0f, 0.86f, 0.68f);
+                sunRot = Quaternion.Euler(28f, 138f, 0f);
 
-                RenderSettings.ambientSkyColor = new Color(0.55f, 0.68f, 0.84f);
-                RenderSettings.ambientEquatorColor = new Color(0.44f, 0.46f, 0.44f);
-                RenderSettings.ambientGroundColor = new Color(0.22f, 0.24f, 0.26f);
-                RenderSettings.fogColor = new Color(0.72f, 0.80f, 0.88f);
+                RenderSettings.ambientSkyColor = new Color(0.32f, 0.42f, 0.56f);
+                RenderSettings.ambientEquatorColor = new Color(0.25f, 0.29f, 0.34f);
+                RenderSettings.ambientGroundColor = new Color(0.18f, 0.20f, 0.22f);
+                RenderSettings.fogColor = new Color(0.70f, 0.73f, 0.78f);
                 RenderSettings.fogStartDistance = 220f;
                 RenderSettings.fogEndDistance = 1400f;
 
@@ -5223,6 +5129,14 @@ namespace GeoSniper
                 RenderSettings.fogStartDistance = 35f;
                 RenderSettings.fogEndDistance = 580f;
 
+                if(SectorWorld.ActiveFeatures!=null && SectorWorld.ActiveFeatures.Exists(f=>MapFeatureStyle.Text(f,"street_study")=="true"))
+                {
+                    sunColor=new Color(.42f,.53f,.67f);sunIntensity=.095f;
+                    RenderSettings.ambientSkyColor=new Color(.026f,.034f,.047f);
+                    RenderSettings.ambientEquatorColor=new Color(.017f,.021f,.027f);
+                    RenderSettings.fogColor=new Color(.026f,.033f,.048f);
+                    RenderSettings.fogStartDistance=75f;RenderSettings.fogEndDistance=1200f;
+                }
                 if (weapon != null) weapon.RainEffect = false;
                 WorldRainSystem.SetRain(false);
                 shotNotice = "ENVIRONMENT: NIGHT MISSION";
@@ -5262,6 +5176,18 @@ namespace GeoSniper
                 shotNotice = "ENVIRONMENT: RAINY NIGHT";
             }
 
+            // One pilot calibration for both night states; rain changes surfaces as well as particles.
+            Shader.SetGlobalFloat("_StreetStudyWetness",isRain?1:0);
+            if(isNight && StreetStudyActive)
+            {
+                sunColor=new Color(.42f,.49f,.57f);sunIntensity=isRain?.07f:.095f;
+                RenderSettings.ambientSkyColor=new Color(.027f,.032f,.040f);
+                RenderSettings.ambientEquatorColor=new Color(.019f,.022f,.027f);
+                RenderSettings.ambientGroundColor=new Color(.010f,.012f,.015f);
+                RenderSettings.fogColor=new Color(.032f,.040f,.049f);
+                RenderSettings.fogStartDistance=isRain?65:90;
+                RenderSettings.fogEndDistance=isRain?850:1200;
+            }
             // Synchronize all directional lights in scene so ghost suns don't blow out night
             var allLights = FindObjectsByType<Light>(FindObjectsSortMode.None);
             foreach (var light in allLights)
@@ -5331,7 +5257,7 @@ namespace GeoSniper
             drawnMarkerRects.Clear();
 
             // Tactical VIP Marker
-            if (stageMode && activeContract.Type == CampaignContractType.Overwatch && contractVIP != null && contractVIP.gameObject.activeSelf && contractVIP.Actor != null && !contractVIP.Actor.IsDead)
+            if (stageMode && (activeContract.Type == CampaignContractType.Overwatch || activeContract.Type == CampaignContractType.Rescue) && contractVIP != null && contractVIP.gameObject.activeSelf && contractVIP.Actor != null && !contractVIP.Actor.IsDead)
             {
                 var vipTarget = contractVIP.transform.position + Vector3.up * 1.65f;
                 var screen = cameraView.WorldToViewportPoint(vipTarget + Vector3.up * 0.45f);
@@ -5469,19 +5395,27 @@ namespace GeoSniper
         {
             if(player==null) return;
             if (height < 330) { Rect smMapBtn = new Rect(width - 135, 120, 117, 32); if (TacticalGUI.DrawButton(smMapBtn, "🗺️ MAP [M]", true, 11)) OpenMap(); return; }
-            float size = Mathf.Clamp(height * 0.19f, 105f, 125f);
+            bool hasDuelRival=TryGetDuelMapRival(out var mapRival);
+            float size = hasDuelRival ? Mathf.Clamp(height * .23f, 140f, 166f) : Mathf.Clamp(height * 0.19f, 105f, 125f);
             float left = width - size - 16;
             float top = 48;
-            Rect minimapHitRect = new Rect(left - 2, top - 20, size + 4, size + 24);
+            Rect minimapHitRect = new Rect(left - 2, top - 20, size + 4, size + (hasDuelRival?58:24));
             if (TacticalGUI.IsClicked(minimapHitRect)) OpenMap();
 
             TacticalGUI.DrawPanel(new Rect(left, top, size, size), new Color(0.03f, 0.06f, 0.08f, 0.85f), TacticalGUI.AccentCyan, 1.2f);
             string district = GetTargetBuildingLocationName();
             if (district.Length > 16) district = district.Substring(0, 16);
-            GUI.Label(new Rect(left, top - 18, size, 16), $"📍 {district.ToUpperInvariant()}", new GUIStyle(GUI.skin.label) { fontSize = 10, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, normal = { textColor = TacticalGUI.AccentCyan } });
+            GUI.Label(new Rect(left, top - 18, size, 16), hasDuelRival ? "1v1 RIVAL RADAR" : $"📍 {district.ToUpperInvariant()}", new GUIStyle(GUI.skin.label) { fontSize = 10, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, normal = { textColor = hasDuelRival ? new Color(1f,.35f,.3f) : TacticalGUI.AccentCyan } });
 
             Vector3 center = player.transform.position;
             DrawStreetMinimap(new Rect(left + 2, top + 2, size - 4, size - 4), center);
+            var arena = GeoSniper.Duel.SniperDuelManager.ActiveInstance;
+            if (MultiplayerDuel && arena != null)
+            {
+                float radarScale = (size * .5f - 14f) / 85f;
+                Vector3 deltaCenter = arena.ArenaCenter - center;
+                DrawDuelArenaRing(new Rect(left, top, size, size), new Vector2(left + size * .5f, top + size * .5f) + new Vector2(deltaCenter.x, -deltaCenter.z) * radarScale, arena.ArenaRadius * radarScale);
+            }
             GUI.color = Color.white;
             GUI.Label(new Rect(left + size - 18, top + 3, 16, 16), "N", MapText(10, new Color(0.20f, 0.28f, 0.36f)));
 
@@ -5517,11 +5451,12 @@ namespace GeoSniper
                 if (radarMarkers.Count >= 8) break;
             }
 
-            if (currentMissionState == MissionState.Extraction)
+            if (TryGetExtractionDestination(out var radarExit))
             {
-                Vector3 delta = extractionPoint - center;
+                Vector3 delta = radarExit - center;
                 Vector2 point = new Vector2(left + size / 2 + delta.x / 85 * (size / 2 - 12), top + size / 2 - delta.z / 85 * (size / 2 - 12));
                 Vector2 radarCenter = new Vector2(left + size / 2, top + size / 2), bearing = point - radarCenter;
+                point=radarCenter+Vector2.ClampMagnitude(bearing,size*.5f-14);
                 if (bearing.sqrMagnitude < 15 * 15) point = radarCenter + (bearing.sqrMagnitude > .01f ? bearing.normalized : Vector2.up) * 15;
                 GUI.color = new Color(0f, 1f, 0.2f);
                 GUI.DrawTexture(new Rect(point.x - 4, point.y - 4, 8, 8), Texture2D.whiteTexture);
@@ -5544,6 +5479,17 @@ namespace GeoSniper
                 GUI.color = new Color(1f, .82f, .1f, 1f);
                 DrawWaypointIcon(pinPos,new Color(1f,.78f,.16f),22);
                 GUI.Label(new Rect(pinPos.x - 25, pinPos.y - 15, 50, 15), $"📍{Mathf.RoundToInt(pinDist)}m", new GUIStyle(GUI.skin.label) { fontSize = 9, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(1f, .85f, .1f) } });
+            }
+
+            if(hasDuelRival)
+            {
+                var radarCenter=new Vector2(left+size*.5f,top+size*.5f);
+                Vector3 delta=mapRival.transform.position-center;
+                Vector2 projected=radarCenter+new Vector2(delta.x,-delta.z)*((size*.5f-14f)/85f);
+                DrawDuelMapMarker(new Rect(left,top,size,size),projected,radarCenter,delta,true);
+                var footer=new Rect(left,top+size+3,size,34);
+                TacticalGUI.DrawPanel(footer,new Color(.13f,.025f,.03f,.96f),new Color(1f,.27f,.23f),1.2f);
+                GUI.Label(footer,$"RIVAL {delta.magnitude:F0}m / {DuelMapHeight(delta.y)}\nTAP TO FIND ON MAP",GUIStyleCache.Get(9,FontStyle.Bold,TextAnchor.MiddleCenter,Color.white));
             }
 
             DrawModernPlayerMarker(new Vector2(left + size / 2, top + size / 2), 12);
@@ -5619,6 +5565,10 @@ namespace GeoSniper
         }
         void OnDestroy()
         {
+            ClearStrongholdEncounter();
+            if(openingOperationProps!=null)Destroy(openingOperationProps);
+            if(campaignAcoustics!=null)Destroy(campaignAcoustics.gameObject);
+            StoryNarrator.StopOutcome(gameObject);
             AdManager.Instance?.HideNativeScreenAd();
             WorldRainSystem.SetRain(false);
             foreach(var material in ownedMaterials) if(material!=null) Destroy(material);

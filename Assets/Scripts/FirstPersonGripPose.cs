@@ -10,6 +10,8 @@ namespace GeoSniper
         Quaternion leftRotation, rightRotation;
         Transform[] bones;
         Quaternion[] rest;
+        float reloadProgress=1,boltBlend,boltPull;
+        public void SetHandling(float reload,float bolt,float pull=0){reloadProgress=reload;boltBlend=bolt;boltPull=pull;}
 
         public void Initialize(Transform rifle,Transform rig)
         {
@@ -34,8 +36,16 @@ namespace GeoSniper
             // The imported arms are a static bind pose; always solve from that pose, not last frame's IK.
             for(int i=0;i<bones.Length;i++) if(bones[i]!=null) bones[i].localRotation=rest[i];
             var support=weapon.Find("WeaponSupport");
-            WeaponGripPose.SolveArm(right,rightPalm,weapon.position,weapon.rotation*rightRotation,weapon.right-weapon.up);
-            if(support!=null) WeaponGripPose.SolveArm(left,leftPalm,support.position,weapon.rotation*leftRotation,-weapon.right-weapon.up);
+            var rightTarget=weapon.TransformPoint(new Vector3(.055f,.065f,-.035f)*boltBlend-Vector3.forward*(.075f*boltPull));
+            WeaponGripPose.SolveArm(right,rightPalm,rightTarget,weapon.rotation*Quaternion.Euler(0,0,-18f*boltBlend)*rightRotation,weapon.right-weapon.up);
+            if(support!=null)
+            {
+                float reach=WeaponHandlingMotion.ReloadHand(reloadProgress);
+                float withdraw=WeaponHandlingMotion.Ease(.28f,.44f,reloadProgress)*(1-WeaponHandlingMotion.Ease(.48f,.65f,reloadProgress));
+                var magazine=weapon.TransformPoint(new Vector3(-.025f,-.07f-withdraw*.16f,.075f));
+                var target=Vector3.Lerp(support.position,magazine,reach);
+                WeaponGripPose.SolveArm(left,leftPalm,target,weapon.rotation*Quaternion.Euler(10f*reach,0,24f*reach)*leftRotation,-weapon.right-weapon.up);
+            }
         }
     }
 }

@@ -1,0 +1,74 @@
+[
+  {
+    "name": "civilian_carla",
+    "title": "Carla Rigged 001 - Rigged 3D Business Women",
+    "source": "https://sketchfab.com/3d-models/carla-rigged-001-rigged-3d-business-women-acf520f450d14dd799f98a6fede3edf5",
+    "creator": "Renderpeople",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloaded": "2026-10-07",
+    "triangles": 19988,
+    "changes": "FBX conversion; 1024px albedo textures; rest pose for gameplay gait; anatomical bone aliases. Roles and accessories adapted in game.",
+    "active": true
+  },
+  {
+    "name": "civilian_casual",
+    "title": "Casual Man Character",
+    "source": "https://sketchfab.com/3d-models/casual-man-character-05d9dd5bdddd4157bd46dc179781ee6e",
+    "creator": "Bogdan Strielecki",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloaded": "2026-10-07",
+    "triangles": 10962,
+    "changes": "FBX conversion; 1024px albedo textures; rest pose for gameplay gait; anatomical bone aliases. Roles and accessories adapted in game.",
+    "active": false
+  },
+  {
+    "name": "civilian_doctor",
+    "title": "Doctor",
+    "source": "https://sketchfab.com/3d-models/doctor-31c09ab8b098489b8c46712650e45bac",
+    "creator": "Nasser",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloaded": "2026-10-07",
+    "triangles": 25915,
+    "changes": "FBX conversion; 1024px albedo textures; rest pose for gameplay gait; anatomical bone aliases. Roles and accessories adapted in game.",
+    "active": true
+  },
+  {
+    "name": "civilian_eric",
+    "title": "Eric Rigged 001 - Rigged 3D Business Man",
+    "source": "https://sketchfab.com/3d-models/eric-rigged-001-rigged-3d-business-man-a46bc9f67aaa415bb4f3241eef900e7f",
+    "creator": "Renderpeople",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloaded": "2026-10-07",
+    "triangles": 20542,
+    "changes": "FBX conversion; 1024px albedo textures; rest pose for gameplay gait; anatomical bone aliases. Roles and accessories adapted in game.",
+    "active": true
+  }
+]

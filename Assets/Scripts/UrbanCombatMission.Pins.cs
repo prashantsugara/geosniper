@@ -7,6 +7,20 @@ namespace GeoSniper
         Texture2D waypointIcon;
         string mapPinNotice="";
         float mapPinNoticeUntil;
+        bool TryGetExtractionDestination(out Vector3 point)
+        {
+            point=default;
+            if(player==null || victoryPending || currentMissionState==MissionState.Complete || currentMissionState==MissionState.Failed)return false;
+            if(stageMode && stageIndex==0 && openingExitActive){point=openingExit;return true;}
+            bool storyExit=stageMode && StoryFieldMode && (activeContract.Type==CampaignContractType.Rescue?hostageReleased:storyPoints.Count>0 && storyCompleted>=storyPoints.Count);
+            if(currentMissionState!=MissionState.Extraction && !storyExit)return false;
+            point=extractionPoint;return true;
+        }
+        void RestoreExtractionGuidance()
+        {
+            if(!TryGetExtractionDestination(out var point))return;
+            SetWaypoint(point,"EXTRACTION");mapBrowseCenter=point;mapSpan=Mathf.Min(mapSpan,180);
+        }
         void SetWaypoint(Vector3 point, string name)
         {
             waypointPin.Set(point, name);
@@ -61,6 +75,7 @@ namespace GeoSniper
                 nearest=distance;destination=point;name=label;exact=preserveHeight;
             }
             foreach(var place in mapPlaces) Candidate(place.Position,place.Name,false);
+            if(TryGetExtractionDestination(out var exit))Candidate(exit,"EXTRACTION",true);
             if(FirstContactMode && firstContact!=null)
             {
                 for(int i=0;i<contractVantages.Count;i++) Candidate(contractVantages[i],"Position "+(char)('A'+i),true);
@@ -98,8 +113,15 @@ namespace GeoSniper
         }
         void DrawPinWorldGuidance(float width,float height)
         {
-            if(!hasWaypointPin || cameraView==null || mapOpen) return;
-            Vector3 screen=cameraView.WorldToViewportPoint(waypointPinPos+Vector3.up*1.5f);
+            if(cameraView==null || player==null || mapOpen)return;
+            bool extracting=TryGetExtractionDestination(out var exit);
+            if(extracting)DrawRouteWorldGuidance(width,height,exit,"EXTRACTION",new Color(.25f,.95f,.55f),0);
+            if(hasWaypointPin && (!extracting || (waypointPinPos-exit).sqrMagnitude>1))
+                DrawRouteWorldGuidance(width,height,waypointPinPos,waypointPin.Name,new Color(1f,.78f,.16f),extracting?36:0);
+        }
+        void DrawRouteWorldGuidance(float width,float height,Vector3 destination,string label,Color color,float bannerOffset)
+        {
+            Vector3 screen=cameraView.WorldToViewportPoint(destination+Vector3.up*1.5f);
             Vector2 direction=new Vector2(screen.x-.5f,.5f-screen.y);
             if(screen.z<0) direction=-direction;
             if(direction.sqrMagnitude<.0001f) direction=Vector2.right;
@@ -118,15 +140,16 @@ namespace GeoSniper
             if(rightSafe<=leftSafe) { leftSafe=105f; rightSafe=width-105f; }
             if(bottomSafe<=topSafe) { topSafe=80f; bottomSafe=height-80f; }
             position.x=Mathf.Clamp(position.x,leftSafe,rightSafe);position.y=Mathf.Clamp(position.y,topSafe,bottomSafe);
-            var color=waypointPin.Arrived(player.transform.position)?new Color(.2f,.8f,.4f):new Color(1f,.78f,.16f);
+            if(bannerOffset>0)position.y=Mathf.Clamp(position.y+36,topSafe,bottomSafe);
             DrawWaypointIcon(position,color,30);
             // Guidance is a compact, fixed banner so it never lands on a virtual
             // button or the bottom status bars when the pin is off-screen.
             float bannerWidth=Mathf.Min(260f,Mathf.Max(190f,width-40f));
-            var rect=new Rect(Mathf.Clamp(width*.5f-bannerWidth*.5f,12f,width-bannerWidth-12f),topSafe-2f,bannerWidth,32f);
+            var rect=new Rect(Mathf.Clamp(width*.5f-bannerWidth*.5f,12f,width-bannerWidth-12f),topSafe-2f+bannerOffset,bannerWidth,32f);
             MapFill(rect,new Color(.04f,.07f,.10f,.92f));
             var text=MapText(12,Color.white,true);text.alignment=TextAnchor.MiddleCenter;
-            GUI.Label(rect,waypointPin.Name+"  |  "+(outside?"TURN TOWARD PIN  |  ":"")+PinGuidance(),text);
+            float distance=Vector3.Distance(player.transform.position,destination);
+            GUI.Label(rect,label+"  |  "+(outside?"TURN TOWARD MARKER  |  ":"")+Mathf.RoundToInt(distance)+" m",text);
         }
     }
 }

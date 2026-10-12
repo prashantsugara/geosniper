@@ -99,6 +99,7 @@ namespace GeoSniper
         public void ActivateAsPrimarySector()
         {
             ActiveFeatures=Features;
+            if(streetStudyRoadTexture!=null)Destroy(streetStudyRoadTexture);
             LoadedWorlds.Remove(this);
             LoadedWorlds.Insert(0,this);
         }
@@ -141,10 +142,17 @@ namespace GeoSniper
         readonly Dictionary<string, Material> roofCache = new Dictionary<string, Material>();
         Material RoofStyled(Color color,string surface)
         {
+            surface=(surface ?? "").Trim().ToLowerInvariant();
+            if(surface=="roof_tiles") surface="tile";
+            if(surface!="metal" && surface!="tile" && surface!="slate") surface="tar";
             string key = ColorUtility.ToHtmlStringRGB(color)+":"+surface;
             if (!roofCache.TryGetValue(key, out var value))
             {
-                value = Material(color, 0.18f, 0.02f);
+                // Sunlit bitumen and slate stay matte, while painted sheet metal retains
+                // a restrained reflection. Keep mapped albedo intact for night visibility.
+                float smoothness=surface=="metal"?.24f:surface=="tile"?.12f:surface=="slate"?.08f:.06f;
+                float metallic=surface=="metal"?.28f:0f;
+                value = Material(color, smoothness, metallic);
                 value.mainTexture = MappedSurfaceTextures.Roof(surface);
                 var norm = BuildRoofNormalTexture();
                 if (norm != null)
@@ -179,6 +187,12 @@ namespace GeoSniper
         }
         public System.Collections.IEnumerator GenerateAsync(List<MapFeature> features, System.Action<int,int> progress=null)
         {
+            MappedShopFronts=0;MappedShopKiosks=0;
+            if(LoadedWorlds.Count==0 || (LoadedWorlds.Count==1 && LoadedWorlds.Contains(this)))
+            {
+                var pilotFocus=transform.InverseTransformPoint(DetailFocus==Vector3.zero?transform.position:DetailFocus);
+                TryStyleRepresentativeStreet(features,new Vector2(pilotFocus.x,pilotFocus.z),out _,out _);
+            }
             Features.Clear(); Features.AddRange(features); ActiveFeatures=Features; Buildings.Clear(); SpawnPoints.Clear(); RooftopSpawns.Clear(); RoadPaths.Clear(); RoadPathFeatures.Clear();
             if(!LoadedWorlds.Contains(this)) LoadedWorlds.Add(this);
             Ladders.RemoveAll(route=>route.Owner==this);
@@ -200,8 +214,16 @@ namespace GeoSniper
             var shoulder = Material(new Color(.64f,.62f,.57f)); shoulder.SetFloat("_Glossiness", 0.12f); shoulder.mainTexture = BuildConcreteSidewalkTexture();
             shoulder.SetTexture("_BumpMap", BuildConcreteNormalTexture());
             shoulder.EnableKeyword("_NORMALMAP");
+            var studyShoulder=shoulder;
+            if(features.Exists(f=>MapFeatureStyle.Text(f,"study_candidate")=="true"))
+            {
+                studyShoulder=Material(new Color(.47f,.45f,.41f));
+                studyShoulder.mainTexture=BuildNeighborhoodPavingTexture();
+                studyShoulder.SetTexture("_BumpMap",BuildConcreteNormalTexture());studyShoulder.SetFloat("_BumpScale",.08f);studyShoulder.EnableKeyword("_NORMALMAP");
+            }
             var road = Material(new Color(.86f,.88f,.88f)); road.SetFloat("_Metallic", 0.02f); road.SetFloat("_Glossiness", 0.14f); road.mainTexture = BuildAsphaltRoadTexture();
             road.SetTexture("_BumpMap", BuildAsphaltNormalTexture());
+            ApplyStreetStudyRoad(road);
             road.EnableKeyword("_NORMALMAP");
             var pavedRoad=Material(new Color(.82f,.82f,.80f));
             pavedRoad.mainTexture=BuildConcreteSidewalkTexture();pavedRoad.SetFloat("_Glossiness",.10f);
@@ -248,6 +270,7 @@ namespace GeoSniper
             int balconyBudget=Application.isMobilePlatform?48:96;
             int windowBudget=Application.isMobilePlatform?64:128;
             var detailedBuildings=WorldDetailPlanner.SelectBuildings(features,focus,windowBudget,300f);
+            var enterableBuildings=EnterableBuilding.Select(features,focus);
             var shopBuildings=new HashSet<MapFeature>();
             foreach(var place in features)
                 if(place.Kind=="place" && SectorSignage.IsShop(place))
@@ -339,9 +362,10 @@ namespace GeoSniper
                                 break;
                         }
                         Material shoulderMat=(roadType==MapFeatureStyle.RoadType.MudDirt || roadType==MapFeatureStyle.RoadType.Gravel)?earthRoad:shoulder;
+                        if(MapFeatureStyle.Text(f,"study_candidate")=="true")shoulderMat=studyShoulder;
                         BuildRoadStrip(a,b,width+(MapFeatureStyle.Path(f)?.5f:2.2f),.10f,shoulderMat,true,roadSurfaceLabel);
                         BuildRoadStrip(a,b,width,.16f,roadMat,false,roadSurfaceLabel);
-                        if(hasCurb) BuildRoadCurb(a,b,width,shoulder,f,junctionMask);
+                        if(hasCurb) BuildRoadCurb(a,b,width,shoulderMat,f,junctionMask);
                     }
                 }
                 else
@@ -414,7 +438,7 @@ namespace GeoSniper
                         baseHeight=Mathf.Max(baseHeight,Ground(midpoint.x,midpoint.y));
                     }
                     // The occupied building sits above terrain; the sealed foundation reaches below it.
-                    baseHeight+=.35f;
+                    baseHeight+=.12f;
                     float foundation=Mathf.Max(.1f,baseHeight-bottomHeight+.05f);
                     float minH = MapFeatureStyle.Number(f, "min_height", 0f);
                     float h = Mathf.Max(minH + 3f, f.Height);
@@ -468,7 +492,15 @@ namespace GeoSniper
                     // facades can protrude through newly authored windows and balconies.
                     bool isPart=WorldDetailPlanner.IsBuildingPart(f);
                     bool detailedFacade=detailedBuildings.Contains(f);
-                    bool importedFacade=!detailedFacade && !isPart && buildingVisuals.TryBuild(f,obj.transform);
+                    bool sceneryOnly=MapFeatureStyle.Text(f,"scenery_only")=="true";
+                    bool enterable=!sceneryOnly && EnterableBuilding.FitLobby(f,out _,out _,out _);
+                    if(enterable)
+                    {
+                        obj.GetComponent<MeshRenderer>().enabled=false;
+                        obj.GetComponent<MeshCollider>().enabled=false;
+                        BuildEnterable(f,obj,h,features,FacadeStyled(f,wallColor,false),roofSurface,enterableBuildings.Contains(f));
+                    }
+                    bool importedFacade=!sceneryOnly && !enterable && !detailedFacade && !isPart && buildingVisuals.TryBuild(f,obj.transform);
                     if(importedFacade)
                     {
                         // Retain the complete collision shell and an exact flat roof;
@@ -479,13 +511,13 @@ namespace GeoSniper
                         obj.GetComponent<MeshFilter>().sharedMesh=cap;
                         obj.GetComponent<MeshRenderer>().sharedMaterials=new[]{roofSurface};
                     }
-                    bool pitched=BuildPitchedRoof(f,obj.transform,h,roofSurface);
-                    if(detailedFacade)
+                    bool pitched=!enterable && BuildPitchedRoof(f,obj.transform,h,roofSurface);
+                    if(detailedFacade && !enterable)
                     {
                         // Remove the repetitive painted window texture beneath the 3D panels.
                         obj.GetComponent<MeshRenderer>().sharedMaterials=new[]{roofSurface,FacadeStyled(f,wallColor,false)};
                         int entranceEdge=BuildingFacadeDetails.EntranceEdge(f,features);
-                        bool isStorefront=shopBuildings.Contains(f) || MapFeatureStyle.Text(f,"class")=="commercial" || MapFeatureStyle.Text(f,"class")=="retail" || (entranceEdge>=0 && f.Height>=6f && Mathf.Abs(f.Points[0].x*17+f.Points[0].y*31)%5==0);
+                        bool isStorefront=shopBuildings.Contains(f) || SectorSignage.IsShop(f) || MapFeatureStyle.Text(f,"class")=="commercial" || MapFeatureStyle.Text(f,"class")=="retail" || (entranceEdge>=0 && f.Height>=6f && Mathf.Abs(f.Points[0].x*17+f.Points[0].y*31)%5==0);
                         var architecture=BuildingFacadeDetails.BuildArchitecture(f,entranceEdge,isStorefront);
                         if(architecture!=null)
                         {
@@ -504,7 +536,7 @@ namespace GeoSniper
                             panels.AddComponent<MeshRenderer>().sharedMaterials=new[]{windowFrame,warmWindow,reflectiveGlass};
                         }
                     }
-                    if(!pitched && detailedFacade && balconyBuildings.Contains(f))
+                    if(!enterable && !pitched && detailedFacade && balconyBuildings.Contains(f))
                     {
                         var detail=BuildingFacadeDetails.Build(f,features);
                         if(detail!=null)
@@ -518,7 +550,7 @@ namespace GeoSniper
                             balconies.AddComponent<MeshCollider>().sharedMesh=detail;
                         }
                     }
-                    if(detailedFacade) ConfigureBuildingLod(obj,mesh,roofSurface,FacadeStyled(f,wallColor,true));
+                    if(detailedFacade && !enterable) ConfigureBuildingLod(obj,mesh,roofSurface,FacadeStyled(f,wallColor,true));
                     if(f.Kind=="building" && f.Points.Count>2)
                     {
                         if(!isPart)
@@ -534,7 +566,7 @@ namespace GeoSniper
                         }
                         Vector2 center=footprintCenter;
                         // Thick edge colliders follow concave footprints without blocking courtyards.
-                        for(int edge=0;edge<f.Points.Count;edge++)
+                        for(int edge=0;!enterable && edge<f.Points.Count;edge++)
                         {
                             var a=To3(f.Points[edge],(h-foundation)/2); var b=To3(f.Points[(edge+1)%f.Points.Count],(h-foundation)/2);
                             if((b-a).sqrMagnitude<.01f) continue;
@@ -597,8 +629,8 @@ namespace GeoSniper
                             float propOffsetDist = Mathf.Clamp(maxRadius * 0.45f, 2.5f, 7.5f);
                             Vector2 propSpot = center - fwdDir * propOffsetDist;
 
-                            RooftopSpawns.Add(transform.TransformPoint(new Vector3(sniperSpot.x, baseHeight + h + 0.15f, sniperSpot.y)));
-                            if(rooftopBuildings.Contains(f))
+                            if(!sceneryOnly)RooftopSpawns.Add(transform.TransformPoint(new Vector3(sniperSpot.x, baseHeight + h + 0.15f, sniperSpot.y)));
+                            if(!enterable && rooftopBuildings.Contains(f))
                             {
                                 BuildLadder(f.Points, baseHeight + h, ladderMaterial);
                                 BuildRooftopProps(f.Points, baseHeight + h, propSpot, trim);
@@ -612,7 +644,12 @@ namespace GeoSniper
             while(roadBatchJob.MoveNext())yield return roadBatchJob.Current;
             foreach(var part in buildingParts)
                 if(part.Key!=null && buildingById.TryGetValue(part.Value,out var parent))
+                {
                     part.Key.transform.SetParent(parent.transform,true);
+                    // A mapped part can duplicate the parent's sealed ground-level shell.
+                    // The playable outline now supplies that parent's walls and floors.
+                    if(parent.GetComponentInChildren<EnterableBuilding>()!=null)part.Key.SetActive(false);
+                }
             var streetMarkings = StreetSurfaceDetails.Build(features, Ground, Application.isMobilePlatform);
             if (streetMarkings != null)
             {
@@ -626,6 +663,8 @@ namespace GeoSniper
             var sceneryJob=scenery.Generate(features,Elevation,focus);
             while(sceneryJob.MoveNext()) yield return sceneryJob.Current;
             gameObject.AddComponent<SectorStreetLighting>().Build(this,warmWindow,focus);
+            // Only the primary sector needs the backdrop; streamed tiles share its skyline.
+            if(LoadedWorlds.Count==1)BuildDecorativeSkyline();
             yield return null;
             Physics.SyncTransforms();
             yield return null;
@@ -672,6 +711,8 @@ namespace GeoSniper
             yield return null;
             var streetPropsJob = BuildStreetPropsAsync(features, trim, paint,focus);
             while(streetPropsJob.MoveNext()) yield return streetPropsJob.Current;
+            var dressingJob=BuildNeighborhoodDressing(features,focus);
+            while(dressingJob.MoveNext()) yield return dressingJob.Current;
             yield return null;
             if(BuildNavigation)
             {
@@ -906,6 +947,10 @@ namespace GeoSniper
             for(int i=0;i<points.Count;i++)
             {
                 float length=(points[(i+1)%points.Count]-points[i]).sqrMagnitude;
+                var midpoint=(points[i]+points[(i+1)%points.Count])*.5f;
+                bool doorway=false;
+                foreach(var interior in EnterableBuilding.All)if(interior.transform.IsChildOf(transform)){var entrance=transform.InverseTransformPoint(interior.transform.TransformPoint(interior.Entrance));if(Vector2.Distance(midpoint,new Vector2(entrance.x,entrance.z))<3.5f){doorway=true;break;}}
+                if(doorway)continue;
                 if(length>longest) { longest=length; edge=i; }
             }
             if(longest<1) return;
@@ -973,6 +1018,7 @@ namespace GeoSniper
 
         public bool HasStairs(Vector3 worldPoint)
         {
+            if(HasInteriorRoofRoute(worldPoint))return true;
             foreach (var route in Ladders)
             {
                 if (route.Owner == this && (Vector3.Distance(route.Landing, worldPoint) < 18f || Vector3.Distance(route.Top, worldPoint) < 18f))
@@ -983,8 +1029,35 @@ namespace GeoSniper
 
         public bool EnsureRooftopLadder(Vector3 worldRoofPoint) => EnsureRooftopStairs(worldRoofPoint);
 
+        public bool EnsureDuelRooftopLadder(Vector3 worldRoofPoint)
+        {
+            if(HasInteriorRoofRoute(worldRoofPoint))return true;
+            Vector3 point = transform.InverseTransformPoint(worldRoofPoint);
+            Vector2 footprintPoint = new Vector2(point.x, point.z);
+            foreach (var feature in Features)
+            {
+                if (feature.Kind != "building" || feature.Points == null || feature.Points.Count < 3
+                    || !IsPointInPolygon(footprintPoint, feature.Points)) continue;
+                if (point.y < Ground(point.x, point.z) + 2.5f) return false;
+                // Match the building rather than distance to its ladder: a large
+                // roof's spawn can be much farther than 18m from the landing.
+                foreach (var route in Ladders)
+                {
+                    if (route.Owner != this) continue;
+                    Vector3 landing = transform.InverseTransformPoint(route.Landing);
+                    if (Mathf.Abs(landing.y - point.y) < 2.5f
+                        && IsPointInPolygon(new Vector2(landing.x, landing.z), feature.Points)) return true;
+                }
+                int previous = Ladders.Count;
+                BuildLadder(feature.Points, point.y, Material(new Color(.16f, .18f, .18f)));
+                return Ladders.Count > previous;
+            }
+            return false;
+        }
+
         public bool EnsureRooftopStairs(Vector3 worldRoofPoint)
         {
+            if(HasInteriorRoofRoute(worldRoofPoint))return true;
             if (HasStairs(worldRoofPoint)) return true;
 
             Vector3 localPt = transform.InverseTransformPoint(worldRoofPoint);
@@ -1452,14 +1525,7 @@ namespace GeoSniper
                                     
                                     if (isPolice)
                                     {
-                                        foreach (var vr in visual.GetComponentsInChildren<Renderer>(true))
-                                        {
-                                            string rName = vr.name.ToLowerInvariant();
-                                            bool isWhite = rName.Contains("door") || rName.Contains("roof") || rName.Contains("white");
-                                            var pMat = Material(isWhite ? new Color(0.92f, 0.92f, 0.94f) : new Color(0.06f, 0.08f, 0.11f));
-                                            pMat.SetFloat("_Glossiness", 0.85f);
-                                            vr.sharedMaterial = pMat;
-                                        }
+                                        PoliceVehicleVisual.Apply(visual);
                                     }
                                     else
                                     {
@@ -2203,6 +2269,7 @@ namespace GeoSniper
 
         void OnDestroy()
         {
+            if(streetStudyRoadTexture!=null)Destroy(streetStudyRoadTexture);
             LoadedWorlds.Remove(this);
             LoadedWorlds.RemoveAll(w => w == null);
             Ladders.RemoveAll(route => route == null || route.Owner == this || route.Owner == null);

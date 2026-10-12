@@ -1,3 +1,4 @@
+param([string]$PackageAssembliesDirectory='Library/ScriptAssemblies')
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 Set-Location $root
@@ -10,6 +11,14 @@ foreach($kind in @('Runtime','Editor')) {
     $lines=$lines -replace '^[-/]out:.*$',"-out:`".utmp/review-checks/Review$kind.dll`""
     $lines=$lines -replace '^[-/]refout:.*$',"-refout:`".utmp/review-checks/Review$kind.ref.dll`""
     if($kind -eq 'Editor') {$lines=$lines -replace '-r:"[^"]*Assembly-CSharp.ref.dll"','-r:".utmp/review-checks/ReviewRuntime.dll"'}
+    foreach($assemblyName in @('Unity.Services.Multiplayer','Unity.Services.Authentication','Unity.Services.Core','Unity.Networking.Transport','Unity.Collections','Unity.Mathematics')) {
+        $assemblyPath=Join-Path $PackageAssembliesDirectory ($assemblyName+'.dll')
+        if(Test-Path $assemblyPath) {
+            $escapedName=[regex]::Escape($assemblyName)
+            $lines=$lines | Where-Object {$_ -notmatch ('^[-/]r:.*[/\\]'+$escapedName+'(?:\.ref)?\.dll"?$')}
+            $lines+='-r:"'+(Join-Path $root $assemblyPath).Replace('\','/')+'"'
+        }
+    }
     $sources=if($kind -eq 'Runtime') {Get-ChildItem Assets/Scripts -File -Filter '*.cs'} else {Get-ChildItem Assets/Editor,Assets/Scripts/Editor -File -Filter '*.cs'}
     $lines+= $sources | ForEach-Object {'"'+$_.FullName.Replace('\','/')+'"'}
     $rsp=".utmp/review-checks/$kind.rsp"

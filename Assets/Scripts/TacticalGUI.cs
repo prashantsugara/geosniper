@@ -126,27 +126,7 @@ namespace GeoSniper
             GUI.color = Color.white;
         }
 
-        public static bool DrawButton(Rect rect, string text, bool isPrimary = false, int fontSize = 16)
-        {
-            InitTextures();
-            bool hover = rect.Contains(Event.current.mousePosition);
-            bool press = hover && Event.current.type == EventType.MouseDown;
-
-            Color bg = isPrimary
-                ? (hover ? new Color(0.0f, 0.70f, 0.85f, 0.95f) : new Color(0.0f, 0.55f, 0.72f, 0.90f))
-                : (hover ? new Color(0.14f, 0.20f, 0.28f, 0.92f) : new Color(0.08f, 0.12f, 0.18f, 0.85f));
-
-            Color border = isPrimary
-                ? AccentCyan
-                : (hover ? AccentCyan * 0.8f : ThemeBorder);
-
-            DrawPanel(rect, bg, border, isPrimary ? 2f : 1.5f);
-
-            var textColor = isPrimary ? Color.white : (hover ? AccentCyan : new Color(0.90f, 0.93f, 0.96f));
-            GUI.Label(rect, text, GUIStyleCache.Get(fontSize, FontStyle.Bold, TextAnchor.MiddleCenter, textColor, true));
-
-            return IsClicked(rect);
-        }
+        public static bool DrawButton(Rect rect,string text,bool isPrimary=false,int fontSize=16) => GameButtonChrome.Draw(rect,text,isPrimary?GameButtonTone.Cyan:GameButtonTone.Steel,fontSize);
 
         public static void DrawBadge(Rect rect, string text, Color accentColor, int fontSize = 13)
         {
@@ -245,75 +225,7 @@ namespace GeoSniper
             return tex;
         }
 
-        public static bool DrawGreenPlayButton(Rect rect, string text = "PLAY")
-        {
-            InitTextures();
-            if (greenBtnTex == null)
-            {
-                greenBtnTex = MakeBoxTex(48, 48, 10f,
-                    new Color(0.50f, 0.82f, 0.18f),
-                    new Color(0.28f, 0.54f, 0.08f),
-                    new Color(0.18f, 0.36f, 0.05f));
-            }
-
-            bool hover = rect.Contains(Event.current.mousePosition);
-            GUI.color = hover ? new Color(1.15f, 1.15f, 1.15f, 1f) : Color.white;
-            GUI.DrawTexture(rect, greenBtnTex);
-            GUI.color = Color.white;
-
-            var style = GUIStyleCache.Get(Mathf.RoundToInt(rect.height * 0.44f), FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
-
-            // Subtle drop shadow
-            GUI.color = new Color(0, 0, 0, 0.4f);
-            GUI.Label(new Rect(rect.x + 1, rect.y + 2, rect.width, rect.height), text, style);
-            GUI.color = Color.white;
-            GUI.Label(rect, text, style);
-
-            return IsClicked(rect);
-        }
-
-        public static bool DrawGoldStoreButton(Rect rect, string text = "STORE")
-        {
-            InitTextures();
-            if (goldBtnTex == null)
-            {
-                goldBtnTex = MakeBoxTex(48, 48, 8f,
-                    new Color(0.96f, 0.76f, 0.28f),
-                    new Color(0.78f, 0.52f, 0.12f),
-                    new Color(0.48f, 0.30f, 0.06f));
-            }
-
-            bool hover = rect.Contains(Event.current.mousePosition);
-            GUI.color = hover ? new Color(1.15f, 1.15f, 1.15f, 1f) : Color.white;
-            GUI.DrawTexture(rect, goldBtnTex);
-            GUI.color = Color.white;
-
-            var style = GUIStyleCache.Get(Mathf.RoundToInt(rect.height * 0.40f), FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.22f, 0.14f, 0.02f));
-
-            GUI.Label(rect, text, style);
-            return IsClicked(rect);
-        }
-
-        public static bool DrawBlueSettingsButton(Rect rect)
-        {
-            InitTextures();
-            if (blueBtnTex == null)
-            {
-                blueBtnTex = MakeBoxTex(36, 36, 6f,
-                    new Color(0.08f, 0.65f, 0.95f),
-                    new Color(0.02f, 0.44f, 0.72f),
-                    new Color(0.01f, 0.25f, 0.45f));
-            }
-
-            bool hover = rect.Contains(Event.current.mousePosition);
-            GUI.color = hover ? new Color(1.15f, 1.15f, 1.15f, 1f) : Color.white;
-            GUI.DrawTexture(rect, blueBtnTex);
-            GUI.color = Color.white;
-
-            var style = GUIStyleCache.Get(Mathf.RoundToInt(rect.height * 0.52f), FontStyle.Normal, TextAnchor.MiddleCenter, Color.white);
-            GUI.Label(rect, "⚙", style);
-            return IsClicked(rect);
-        }
+        public static bool DrawGreenPlayButton(Rect rect,string text="PLAY") => GameButtonChrome.Draw(rect,text,GameButtonTone.Cyan,Mathf.Clamp((int)(rect.height*.34f),12,20));
 
         public static void DrawNotificationBadge(Vector2 center, string text = "1")
         {

@@ -1,0 +1,15 @@
+{
+  "title": "House interior",
+  "creator": "Katydid",
+  "source": "https://sketchfab.com/3d-models/house-interior-e910b8395ddc4b9886d87caffdbacc69",
+  "license": {
+    "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+    "label": "CC Attribution",
+    "fullName": "Creative Commons Attribution",
+    "requirements": "Author must be credited. Commercial use is allowed.",
+    "url": "http://creativecommons.org/licenses/by/4.0/",
+    "slug": "by"
+  },
+  "downloaded": "2026-10-06",
+  "changes": "Grounded and normalized the house to 3.2m height, joined source meshes to reduce draw calls and exported FBX for Unity."
+}

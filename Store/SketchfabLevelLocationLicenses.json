@@ -1,0 +1,62 @@
+[
+  {
+    "title": "Military Tent",
+    "creator": "Reinaw13",
+    "source": "https://sketchfab.com/3d-models/military-tent-d95296298b2a4caca8a5c3ce4450bb15",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloaded": "2026-10-10",
+    "changes": "Grounded and scaled to a 4.4 metre fabric width; source maps capped at 1024 pixels. Metallic/roughness channels packed for Unity; fabric is dielectric. Runtime height fitted to standing-player entry clearance. Source guy ropes/stakes remain visual details without movement collision."
+  },
+  {
+    "title": "Old Apartment Building",
+    "creator": "jimbogies",
+    "source": "https://sketchfab.com/3d-models/old-apartment-building-a2a27bec2e364496b34ae399ee93cb67",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloaded": "2026-10-10",
+    "changes": "Ground and glass omitted. Forty closed door/frame faces removed to open the source ground-floor entrance. Grounded and scaled to 14 metres wide; source brick albedo and normal maps capped at 1024 pixels. Playable galleries, connected stairs and railings are project-authored."
+  },
+  {
+    "title": "Pack - Realistic - 3 Warehouse",
+    "creator": "Islide",
+    "source": "https://sketchfab.com/3d-models/pack-realistic-3-warehouse-320c272513a94c0482dbb3c4e79d61f5",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloaded": "2026-10-10",
+    "changes": "Central warehouse isolated from the three-building pack; unused vertices, door/window planes and 82 front-loading wall faces removed. Front replaced with project-authored open loading bays and a supported dock; roof/side/rear source geometry and textures retained. Runtime height fitted to loading-bay clearance."
+  },
+  {
+    "title": "Abandoned Shopping Mall",
+    "creator": "Miguel Ad\u00e3o",
+    "source": "https://sketchfab.com/3d-models/abandoned-shopping-mall-5ede6f812941428dae4b31a3487623fd",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloaded": "2026-10-10",
+    "changes": "Shelves and fridge extracted from the interior vignette, scaled for gameplay, and fitted into the project-authored open shopping gallery. Source PBR maps capped at 1024 pixels and metallic/roughness channels packed for Unity. This source is an interior vignette, not a complete mall building."
+  }
+]

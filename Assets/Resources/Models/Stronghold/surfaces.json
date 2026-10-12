@@ -1,0 +1,91 @@
+{
+  "models": [
+    {
+      "name": "AfghanStronghold",
+      "triangles": 16106,
+      "size": [
+        19.679384231567383,
+        25.435848236083984,
+        10.0
+      ],
+      "materials": [
+        {
+          "sourceMaterial": "FLoor",
+          "maps": {}
+        },
+        {
+          "sourceMaterial": "Wall3",
+          "maps": {}
+        },
+        {
+          "sourceMaterial": "Wood_planks",
+          "maps": {}
+        },
+        {
+          "sourceMaterial": "Wood_planks3",
+          "maps": {}
+        },
+        {
+          "sourceMaterial": "Wood_planks4",
+          "maps": {}
+        },
+        {
+          "sourceMaterial": "GalleryStone",
+          "maps": {}
+        },
+        {
+          "sourceMaterial": "GalleryFloor",
+          "maps": {}
+        },
+        {
+          "sourceMaterial": "GalleryWood",
+          "maps": {}
+        },
+        {
+          "sourceMaterial": "GalleryMetal",
+          "maps": {}
+        },
+        {
+          "sourceMaterial": "GalleryDark",
+          "maps": {}
+        }
+      ]
+    },
+    {
+      "name": "Sandbag",
+      "triangles": 712,
+      "size": [
+        0.47889694571495056,
+        0.8590795397758484,
+        0.25999999046325684
+      ],
+      "materials": [
+        {
+          "sourceMaterial": "PR_SandBag_SHD",
+          "maps": {
+            "albedo": "Sandbag_surface_0_albedo",
+            "orm": "Sandbag_surface_0_orm",
+            "normal": "Sandbag_surface_0_normal"
+          }
+        }
+      ]
+    }
+  ],
+  "surfaces": {
+    "Plaster": {
+      "albedo": "Plaster_albedo",
+      "orm": "Plaster_orm",
+      "normal": "Plaster_normal"
+    },
+    "Stone": {
+      "albedo": "Stone_albedo",
+      "orm": "Stone_orm",
+      "normal": "Stone_normal"
+    },
+    "Timber": {
+      "albedo": "Timber_albedo",
+      "orm": "Timber_orm",
+      "normal": "Timber_normal"
+    }
+  }
+}

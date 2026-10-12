@@ -10,6 +10,17 @@ namespace GeoSniper
                 fontStyle=bold?FontStyle.Bold:FontStyle.Normal,normal={textColor=color}});
         }
 
+        public void StartPreparedCampaign()
+        {
+            if(currentMissionState!=MissionState.Briefing || contractSetupError!=null)return;
+            currentMissionState=MissionState.InProgress;
+            PrepareCampaignAcoustics();earlyFieldHintSeen=false;
+            if(player!=null)player.InputBlocked=false;
+            foreach(var enemy in enemies)if(enemy!=null)enemy.Suspended=false;
+            foreach(var civ in civilians)if(civ!=null)civ.Suspended=false;
+            GameAnalyticsManager.TrackMissionStart(stageIndex,activeContract.Type.ToString(),weapon!=null?weapon.CurrentWeaponIndex:1);
+            PlayHQDispatchSound();
+        }
         void DrawCommandBriefing()
         {
             var previous=GUI.matrix;
@@ -47,30 +58,21 @@ namespace GeoSniper
                     :activeContract.Type==CampaignContractType.TimedInterception?"Find the courier first. Lead moving targets."
                     :activeContract.Type==CampaignContractType.Escape?"Reload between waves. Clear hostiles to let the next wave advance."
                     :"Identify your targets. Steady your aim before firing.";
-                BriefingText(new Rect(x+50,y+390,510,40),tip,14,amber);
+                BriefingText(new Rect(x+50,y+390,510,40),StoryFieldMode?"Move to the marker. Start the action, then stay close while it completes.":tip,14,amber);
 
                 BriefingText(new Rect(x+615,y+225,265,22),"REAL-WORLD LOCATION",12,muted,true);
-                BriefingText(new Rect(x+615,y+260,265,55),"NEAR " + GetTargetBuildingLocationName(),18,text,true);
+                BriefingText(new Rect(x+615,y+260,265,48),"NEAR " + GetTargetBuildingLocationName(),18,text,true);
+                if(campaignNode!=null)BriefingText(new Rect(x+615,y+310,265,16),"OPTIONAL SITE: "+CampaignLocationProfile.ForStage(stageIndex).Name,11,amber);
                 CommandGUI.Fill(new Rect(x+615,y+327,265,1),CommandGUI.ThemeBorder);
-                BriefingText(new Rect(x+615,y+345,125,22),extractionWaves!=null?"MAX ACTIVE":"HOSTILES",11,muted);
-                BriefingText(new Rect(x+755,y+345,125,22),"TIME LIMIT",11,muted);
-                BriefingText(new Rect(x+615,y+373,125,38),(extractionWaves!=null?extractionWaves.ActiveCap:stageTarget).ToString("00"),28,text,true);
-                string timing=contractModeTimer>0?Mathf.CeilToInt(contractModeTimer)+" SEC":"NONE";
-                BriefingText(new Rect(x+755,y+377,125,34),timing,21,text,true);
-                if(activeContract.Type==CampaignContractType.Escape)
-                    BriefingText(new Rect(x+755,y+408,125,20),"SURVIVAL HOLD",10,muted);
+                BriefingText(new Rect(x+615,y+345,265,78),campaignNode!=null?campaignNode.briefing:"Watch your route and keep cover nearby.",13,text);
+                BriefingText(new Rect(x+30,y+447,860,20),campaignNode!=null?"OPTIONAL: "+CampaignStory.BonusDescription(campaignNode.bonusGoal):"",12,amber);
 
                 CommandGUI.Fill(new Rect(x+30,y+468,860,1),CommandGUI.ThemeBorder);
                 if(CommandGUI.DrawButton(new Rect(x+30,y+491,145,46),"BACK",false,14)) ExitToLevelMap();
                 if(CommandGUI.DrawButton(new Rect(x+440,y+491,210,46),"INSPECT MAP",false,14)) OpenMap();
                 if(CommandGUI.DrawButton(new Rect(x+670,y+491,220,46),"BEGIN MISSION  >",true,15))
                 {
-                    currentMissionState=MissionState.InProgress;
-                    if(player!=null) player.InputBlocked=false;
-                    foreach(var enemy in enemies) if(enemy!=null) enemy.Suspended=false;
-                    foreach(var civ in civilians) if(civ!=null) civ.Suspended=false;
-                    GameAnalyticsManager.TrackMissionStart(stageIndex, activeContract.Type.ToString(), weapon != null ? weapon.CurrentWeaponIndex : 1);
-                    PlayHQDispatchSound();
+                    StartPreparedCampaign();
                 }
             }
             finally {GUI.matrix=previous;GUI.color=previousColor;}

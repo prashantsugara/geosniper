@@ -7,6 +7,10 @@ namespace GeoSniper
         public float maxHealth=100;
         public bool IsDead { get; private set; }
         public bool Invulnerable;
+        public bool AllowExecutionHeadshots=true;
+        // Used only by the story rival who can defect after losing the duel.
+        public bool CanSurrender;
+        public bool Surrendered { get; private set; }
         public float Health { get; private set; }
         
         public event System.Action<CombatActor> OnDeath;
@@ -18,7 +22,7 @@ namespace GeoSniper
         void Awake() { Health = maxHealth; }
         public void Initialize(float health)
         {
-            maxHealth=health;Health=health;IsDead=false;lastDamageTime=Time.time;
+            maxHealth=health;Health=health;IsDead=false;Surrendered=false;lastDamageTime=Time.time;
             var collider=GetComponent<Collider>();if(collider!=null) collider.enabled=true;
         }
 
@@ -36,6 +40,10 @@ namespace GeoSniper
             lastDamageTime = Time.time;
             if (sourcePos != Vector3.zero) LastDamageSourcePos = sourcePos;
             bool lethal = Health <= 0;
+            if(lethal && CanSurrender)
+            {
+                Health=1;Surrendered=true;Invulnerable=true;OnDamaged?.Invoke(amount);return;
+            }
             if (lethal) IsDead = true;
             OnDamaged?.Invoke(amount);
             if (lethal) Die();

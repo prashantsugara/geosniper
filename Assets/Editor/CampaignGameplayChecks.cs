@@ -56,6 +56,10 @@ public static class CampaignGameplayChecks
         int until=Time.frameCount+count;
         while(Time.frameCount<until) yield return null;
     }
+    static IEnumerator Seconds(float duration)
+    {
+        float until=Time.time+duration;while(Time.time<until)yield return null;
+    }
     static IEnumerator Checks()
     {
         bool hadDifficulty=PlayerPrefs.HasKey("GeoSniper.Difficulty");int oldDifficulty=PlayerPrefs.GetInt("GeoSniper.Difficulty");
@@ -142,12 +146,12 @@ public static class CampaignGameplayChecks
                         {
                             var courier=(EnemyBot)objective;
                             Require(courier.runnerStartDelay>=10f,"Courier has no opening reaction window at "+node.id);
-                            yield return Frames(120);
+                            yield return Seconds(2);
                             Require(Vector3.Distance(start,objective.transform.position)<.3f,
                                 "Courier departed during opening reaction window at "+node.id);
                             courier.runnerStartDelay=0f;
                         }
-                        yield return Frames(120);
+                        yield return Seconds(2);
                         Require(Vector3.Distance(start,objective.transform.position)>.7f,
                             "Objective did not move after briefing at "+node.id);
                         Require(mission.currentMissionState==MissionState.InProgress,
@@ -169,6 +173,40 @@ public static class CampaignGameplayChecks
                         report.AppendLine("PASS: live "+node.contractType+" movement and completion at node "+node.id);
                     }
                     if(waves!=null)CheckAssaultWaves(mission,waves,node.id);
+                    if(node.contractType==CampaignContractType.EvidenceRecovery || node.contractType==CampaignContractType.Sabotage)
+                    {
+                        foreach(var enemy in enemies)enemy.gameObject.SetActive(false);
+                        var points=(IList)Get(mission,"storyPoints");Require(points.Count==CampaignStory.Get(node.id).interactions,"Missing field objectives at "+node.id);
+                        var update=typeof(UrbanCombatMission).GetMethod("UpdateStoryField",Private);
+                        foreach(var point in points)
+                        {
+                            var destination=(Vector3)point.GetType().GetField("Position").GetValue(point);
+                            mission.Player.Place(destination+Vector3.right*.8f);
+                            camera.transform.position=mission.Player.transform.position+Vector3.up*1.5f;camera.transform.LookAt(destination+Vector3.up*.8f);
+                            Physics.SyncTransforms();Set(mission,"storyUseUntil",Time.unscaledTime+10);
+                            update.Invoke(mission,new object[]{4f});
+                            Require((bool)point.GetType().GetField("Done").GetValue(point),"Cannot interact with field objective at "+node.id);
+                        }
+                        Require((int)Get(mission,"storyCompleted")==points.Count,"Field progress lost at "+node.id);
+                        Require(!(bool)Get(mission,"victoryPending"),"Evidence completion skipped extraction at "+node.id);
+                        mission.Player.Place((Vector3)Get(mission,"extractionPoint"));update.Invoke(mission,new object[]{.1f});
+                        Require((bool)Get(mission,"victoryPending"),"Field extraction does not complete at "+node.id);
+                        report.AppendLine("PASS: interaction chain and extraction for "+node.contractType+" at "+node.id);
+                    }
+                    if(node.contractType==CampaignContractType.Rescue)
+                    {
+                        foreach(var enemy in enemies)enemy.gameObject.SetActive(false);
+                        Require(vip!=null && vip.HeldForRescue,"Witness is not held at "+node.id);
+                        Vector3 held=vip.transform.position;yield return Frames(10);Require(Vector3.Distance(held,vip.transform.position)<.1f,"Held witness ran away");
+                        mission.Player.Place(held+Vector3.right*.8f);camera.transform.position=mission.Player.transform.position+Vector3.up*1.5f;camera.transform.LookAt(held+Vector3.up*.8f);
+                        Physics.SyncTransforms();Set(mission,"storyUseUntil",Time.unscaledTime+10);
+                        var update=typeof(UrbanCombatMission).GetMethod("UpdateStoryField",Private);update.Invoke(mission,new object[]{3.1f});
+                        Require(!(vip.HeldForRescue) && (bool)Get(mission,"hostageReleased"),"Witness cannot be released at "+node.id);
+                        Require(!(bool)Get(mission,"victoryPending"),"Release bypassed witness extraction");
+                        vip.transform.position=(Vector3)Get(mission,"extractionPoint");update.Invoke(mission,new object[]{.1f});
+                        Require((bool)Get(mission,"victoryPending"),"Rescue extraction does not complete at "+node.id);
+                        report.AppendLine("PASS: held witness, release and protected extraction at "+node.id);
+                    }
                 }
                 if(node.isPvPDuel)
                 {
@@ -176,6 +214,11 @@ public static class CampaignGameplayChecks
                     mission.Restart();yield return Frames(8);
                     Require(mission.isPvPDuel && mission.currentMissionState==MissionState.InProgress,"Retry lost duel mode");
                     Require(ReferenceEquals(Get(mission,"campaignNode"),node) && Mathf.Approximately(mission.Difficulty.enemyDamage,damage),"Retry changed node or compounded difficulty");
+                    if(node.id==9)
+                    {
+                        var ghost=(EnemyBot)Get(mission,"duelRivalSniper");ghost.Actor.Damage(10000f);yield return Frames(3);
+                        Require(ghost.Actor.Surrendered && !ghost.Actor.IsDead && (bool)Get(mission,"victoryPending"),"Ghost cannot defect after surrender");
+                    }
                 }
                 Set(mission,"victoryPending",true);
                 typeof(UrbanCombatMission).GetMethod("FailMission",Private).Invoke(mission,new object[]{"TEST OBJECTIVE FAILURE"});
@@ -185,6 +228,7 @@ public static class CampaignGameplayChecks
                 string guidance=(string)typeof(UrbanCombatMission).GetMethod("FailureGuidance",Private).Invoke(mission,null);
                 Require(!string.IsNullOrWhiteSpace(guidance) && guidance.Length>40,"Missing actionable failure guidance at "+node.id);
                 report.AppendLine("PASS: node "+node.id+" "+node.title+" / "+CampaignProgression.Label(node)+" / "+enemies.Count+" threats");
+                Directory.CreateDirectory("Logs");File.WriteAllText("Logs/CampaignGameplayChecks.txt",report.ToString());
                 Object.Destroy(root);yield return Frames(3);
             }
             // No invisible rooftop fallback on maps with no roofs. A supported

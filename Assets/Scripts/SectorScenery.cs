@@ -23,6 +23,8 @@ namespace GeoSniper
         }
         readonly List<Mesh> meshes=new List<Mesh>();
         readonly List<Material> materials=new List<Material>();
+        RealisticVegetation realistic;
+        static readonly string[] ShrubSpecies={"RoundedShrub","ConeShrub","LowShrub","TallShrub"};
 
         static Texture2D barkTex;
         static Texture2D barkNormalTex;
@@ -166,7 +168,7 @@ namespace GeoSniper
             int clumps=0, trees=0;
             var planted=new List<Vector2>();
             int treeBudget=Application.isMobilePlatform?
-                (MobileGraphics.Selected==MobileGraphicsPreset.Performance?120:MobileGraphics.Selected==MobileGraphicsPreset.High?260:190):450;
+                (MobileGraphics.Selected==MobileGraphicsPreset.Performance?60:MobileGraphics.Selected==MobileGraphicsPreset.High?140:100):300;
             bool mappedWoodland=features.Exists(f=>f.Kind=="park" && LandUse(f)==PlantingKind.Woodland);
             int grassStep=Application.isMobilePlatform?
                 (MobileGraphics.Selected==MobileGraphicsPreset.Performance?12:MobileGraphics.Selected==MobileGraphicsPreset.High?6:8):8;
@@ -192,7 +194,7 @@ namespace GeoSniper
                 if(!CanPlant(p,nearby,out float y,out var roadsideKind) || roadsideKind==PlantingKind.Sports) continue;
                 var root=new Vector3(p.x,y+(sector!=null?sector.Ground(p.x,p.y):elevation?.Sample(transform.position.x+p.x,transform.position.z+p.y)??0),p.y);
                 bool lightCanopy=random.NextDouble()<.38;
-                AddTreeToCell(treeCells,root,3.1f+(float)random.NextDouble()*1.3f,lightCanopy,roadsideKind);
+                AddTreeToCell(treeCells,root,5f+(float)random.NextDouble()*2.5f,lightCanopy,roadsideKind);
                 planted.Add(p); trees++;
             }
             // Fixed budget and small batches avoid thousands of grass GameObjects on phones.
@@ -210,8 +212,9 @@ namespace GeoSniper
                     {
                         Vector3 root=new Vector3(p.x,y+terrain,p.y);
                         bool lightCanopy=random.NextDouble()<.38;
-                        float height=planting==PlantingKind.Woodland?5.5f+(float)random.NextDouble()*3f:
-                            2.8f+(float)random.NextDouble()*1.8f;
+                        float height=planting==PlantingKind.Woodland?9f+(float)random.NextDouble()*3f:
+                            planting==PlantingKind.Park?7f+(float)random.NextDouble()*3f:
+                            6f+(float)random.NextDouble()*2f;
                         AddTreeToCell(treeCells,root,height,lightCanopy,planting);
                         trees++; planted.Add(p);
                     }
@@ -221,7 +224,9 @@ namespace GeoSniper
                         AddStone(new Vector3(p.x,y+terrain,p.y),.25f+(float)random.NextDouble()*.35f,stoneVertices,stoneIndices);
                     float coverage=(Mathf.Sin(p.x*.035f)+Mathf.Cos(p.y*.041f))*.5f;
                     if(random.NextDouble()>(coverage>.2f?.70f:.25f)) continue;
-                    for(int blade=0;blade<4;blade++)
+                    if(realistic==null)realistic=gameObject.AddComponent<RealisticVegetation>();
+                    bool realGrass=realistic.Add(random.NextDouble()<.2?"LeafyGroundPlant":"GrassClump",new Vector3(p.x,y+terrain,p.y),.25f+(float)random.NextDouble()*.2f,(float)random.NextDouble()*360);
+                    for(int blade=0;!realGrass && blade<4;blade++)
                     {
                         float angle=(float)random.NextDouble()*Mathf.PI*2;
                         Vector3 root=new Vector3(p.x+(float)random.NextDouble()*1.7f,y,p.y+(float)random.NextDouble()*1.7f);
@@ -278,6 +283,7 @@ namespace GeoSniper
             if(shrubVertices.Count>0) MakeMesh("Shrub patch",shrubVertices,shrubIndices,shrubs,shrubUVs);
             if(stoneVertices.Count>0) MakeMesh("Stone patch",stoneVertices,stoneIndices,stones);
             if(reedVertices.Count>0) MakeMesh("Reed patch",reedVertices,reedIndices,reeds);
+            if(realistic!=null)realistic.Flush();
             foreach(var cell in treeCells.Values)
             {
                 if(cell.trunk.Count>0)MakeMesh("Local tree trunks",cell.trunk,cell.trunkIndices,treeTrunk,cell.trunkUVs,null,0,180);
@@ -303,8 +309,11 @@ namespace GeoSniper
             }
         }
 
-        static void AddShrub(Vector3 root,float radius,List<Vector3> vertices,List<int> indices,List<Vector2> uvs)
+        void AddShrub(Vector3 root,float radius,List<Vector3> vertices,List<int> indices,List<Vector2> uvs)
         {
+            if(realistic==null)realistic=gameObject.AddComponent<RealisticVegetation>();
+            int species=Mathf.Clamp(Mathf.FloorToInt(Mathf.PerlinNoise(root.x*.3f,root.z*.3f)*ShrubSpecies.Length),0,ShrubSpecies.Length-1);
+            if(realistic.Add(ShrubSpecies[species],root,radius*1.3f,species*73))return;
             int start=vertices.Count;
             const int sides=8;
             for(int ring=0;ring<4;ring++)
@@ -347,13 +356,15 @@ namespace GeoSniper
                 if(bounds[index].Contains(point)) nearby.Add(features[index]);
         }
 
-        static void AddTreeToCell(Dictionary<Vector2Int,TreeCell> cells,Vector3 root,float height,bool light,PlantingKind planting)
+        void AddTreeToCell(Dictionary<Vector2Int,TreeCell> cells,Vector3 root,float height,bool light,PlantingKind planting)
         {
             var key=new Vector2Int(Mathf.FloorToInt((root.x+320f)/128f),Mathf.FloorToInt((root.z+320f)/128f));
             if(!cells.TryGetValue(key,out var cell))cells[key]=cell=new TreeCell();
             float formSeed=Mathf.PerlinNoise(root.x*.097f+15f,root.z*.097f+33f);
             TreeForm form=planting==PlantingKind.Woodland && formSeed<.27f?TreeForm.Columnar:
                 formSeed>.76f?TreeForm.Spreading:TreeForm.Rounded;
+            if(realistic==null)realistic=gameObject.AddComponent<RealisticVegetation>();
+            if(!realistic.Add(formSeed>.5f?"BroadleafTree":"SpreadingTree",root,height,formSeed*360))
             AddTree(root,height,cell.trunk,cell.trunkIndices,cell.trunkUVs,
                 light?cell.light:cell.canopy,light?cell.lightIndices:cell.canopyIndices,
                 light?cell.lightUVs:cell.canopyUVs,light?cell.lightNormals:cell.canopyNormals,form);
@@ -580,7 +591,7 @@ namespace GeoSniper
             switch(kind)
             {
                 case PlantingKind.Woodland:return .28f;
-                case PlantingKind.Park:return .09f;
+                case PlantingKind.Park:return .16f;
                 case PlantingKind.Scrub:return .035f;
                 case PlantingKind.Meadow:return .018f;
                 default:return .025f;

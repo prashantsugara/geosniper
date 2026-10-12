@@ -8,6 +8,45 @@ namespace GeoSniper
     public static class CampaignProgression
     {
         public const int MaxTier = 10;
+        public const float ReplayRewardScale=.25f;
+        public static int RewardAmount(int amount,bool replay) => amount<=0?0:replay?Mathf.Max(1,Mathf.FloorToInt(amount*ReplayRewardScale)):amount;
+        public static int CreditsReward(LevelNode node) => node==null?0:RewardAmount(node.rewardCash,CampaignNodeGraph.IsNodeCompleted(node.id));
+        public static int XPReward(LevelNode node) => node==null?0:RewardAmount(node.rewardXP,CampaignNodeGraph.IsNodeCompleted(node.id));
+        // Smooth per-level durability: 60 HP at level 1, 210 HP at level 50 on Standard.
+        public static float HealthScale(LevelNode node) => node==null?1f:Mathf.Lerp(.60f,2.10f,Mathf.Clamp01(node.id/49f));
+        public static bool Armored(LevelNode node) => node!=null && node.id>=6;
+        public static float ExpectedHealth(LevelNode node,DifficultyLevel level)
+        {
+            var baseline=DifficultyProfile.Create(level);
+            float health=100f*baseline.enemyHealth*HealthScale(node);
+            Object.Destroy(baseline);
+            return health;
+        }
+        public static int BodyHits(float health,int rifle,int rank) => Mathf.Max(1,Mathf.CeilToInt(health/WeaponProgression.Damage(rifle,rank)));
+        public static bool Underpowered(LevelNode node,float health,int rifle,int rank)
+            => BodyHits(health,rifle,rank)>3 || (Armored(node) && WeaponProgression.Damage(rifle,rank)*(rifle<5?4f:2f)<health);
+        // Prefer improving the owned weapon when it can reach a two-hit torso target.
+        public static int RequiredDamageRank(float health,int rifle,int currentRank)
+        {
+            for(int rank=currentRank;rank<=WeaponProgression.MaxTier;rank++)
+                if(BodyHits(health,rifle,rank)<=2) return rank;
+            return -1;
+        }
+        public static int RecommendedReplacement(float health,int current)
+        {
+            int best=-1,price=int.MaxValue;
+            for(int rifle=0;rifle<5;rifle++)
+            {
+                var gun=WeaponCatalog.Get(rifle);
+                int rank=WeaponCatalog.Owned(rifle)?WeaponProgression.Tier(rifle,WeaponUpgrade.Damage):0;
+                if(rifle==current || !WeaponCatalog.RankEligible(rifle) || RequiredDamageRank(health,rifle,rank)<0) continue;
+                // A suitable owned rifle takes priority; otherwise prefer a credit purchase over gold.
+                int cost=WeaponCatalog.Owned(rifle)?0:gun.Gold?1000000+gun.UnlockCost:gun.UnlockCost;
+                if(BodyHits(health,rifle,rank)>2) cost+=2000000;
+                if(cost<price) {best=rifle;price=cost;}
+            }
+            return best;
+        }
         public static int Tier(LevelNode node) => node == null ? 5 : Mathf.Clamp(node.difficultyTier,0,MaxTier);
         public static string Label(LevelNode node)
         {
@@ -60,7 +99,7 @@ namespace GeoSniper
             if(node==null) return profile; // Standalone modes retain their selected difficulty.
             float t=Tier(node)/(float)MaxTier;
             profile.name=baseline.name+" / campaign tier "+Tier(node);
-            profile.enemyHealth*=Mathf.Lerp(.75f,1.15f,t);
+            profile.enemyHealth*=HealthScale(node);
             profile.enemyDamage*=Mathf.Lerp(.45f,1.40f,t);
             profile.enemySpeed*=Mathf.Lerp(.78f,1.10f,t);
             profile.detectionSpeed*=Mathf.Lerp(.50f,1.25f,t);

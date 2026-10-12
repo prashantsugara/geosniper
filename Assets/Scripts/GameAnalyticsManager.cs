@@ -35,9 +35,17 @@ namespace GeoSniper
         public static string TotalPlaytimeFormatted=>FormatDuration(TotalPlaytimeSeconds);
         public static string AverageSessionFormatted=>FormatDuration(AverageSessionSeconds);
         public static string ClientId{get{const string k="GeoSniper.Analytics.ClientId";if(!PlayerPrefs.HasKey(k)){PlayerPrefs.SetString(k,Guid.NewGuid().ToString());PlayerPrefs.Save();}return PlayerPrefs.GetString(k);}}
+        static string sessionId;
+        public static string SessionId { get { if(string.IsNullOrEmpty(sessionId)) sessionId = Guid.NewGuid().ToString("N").Substring(0, 12); return sessionId; } }
+        static int deploymentAttempt;
+        public static int NextDeploymentAttempt() => ++deploymentAttempt;
+        public static int CurrentDeploymentAttempt => deploymentAttempt;
+        public static bool IsDeveloperDevice => Application.isEditor || Debug.isDebugBuild || PlayerPrefs.GetInt("GeoSniper.DebugMode", 0) == 1;
+        struct QueuedEvent { public string Name; public Dictionary<string, object> Parameters; }
+        static readonly List<QueuedEvent> pendingEvents = new List<QueuedEvent>();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        static void ResetStatics(){instance=null;firebaseReady=false;unityReady=false;}
+        static void ResetStatics(){instance=null;firebaseReady=false;unityReady=false;pendingEvents.Clear();}
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void AutoInitialize()
@@ -81,6 +89,7 @@ namespace GeoSniper
                 firebaseStatus=unityStatus="Disabled in release configuration";
                 return;
             }
+            if(!HasConsentChoice) SetAnalyticsConsent(true);
             InitializeFirebase();
             InitializeUnity();
         }
@@ -101,8 +110,10 @@ namespace GeoSniper
                 {
                     var app=FirebaseApp.DefaultInstance;
                     FirebaseAnalytics.SetAnalyticsCollectionEnabled(ConsentGranted);
+                    FirebaseAnalytics.SetUserProperty("user_type", IsDeveloperDevice ? "developer" : "player");
                     firebaseReady=true;
                     firebaseStatus=ConsentGranted?"SDK ready; collection enabled":"SDK ready; awaiting consent";
+                    FlushPendingFirebaseEvents();
                 }
                 catch(Exception ex){firebaseStatus="Initialization failed";Debug.LogWarning("Firebase Analytics: "+ex.Message);}
             });
@@ -174,10 +185,14 @@ namespace GeoSniper
 
         public static void TrackMissionStart(int stageIndex,string contractType,int weaponIndex)
         {
+            if(stageIndex==0)TrackCustomEvent("first_mission_started",new Dictionary<string,object>{{"stage_index",1},{"contract_type",contractType??"Standard"}});
+            else if(stageIndex==1)TrackCustomEvent("mission_two_started",new Dictionary<string,object>{{"stage_index",2},{"contract_type",contractType??"Standard"}});
             TrackCustomEvent("level_start",new Dictionary<string,object>{{"level_name","Stage_"+(stageIndex+1)},{"stage_index",stageIndex+1},{"contract_type",contractType??"Standard"},{"weapon_index",weaponIndex}});
         }
         public static void TrackMissionEnd(int stageIndex,string contractType,bool success,float durationSec,int stars,int headshots,float accuracy,string failReason="")
         {
+            if(stageIndex==0)TrackCustomEvent(success?"first_mission_completed":"first_mission_failed",new Dictionary<string,object>{{"stage_index",1},{"duration_sec",Mathf.RoundToInt(durationSec)}});
+            else if(stageIndex==1)TrackCustomEvent(success?"mission_two_completed":"mission_two_failed",new Dictionary<string,object>{{"stage_index",2},{"duration_sec",Mathf.RoundToInt(durationSec)}});
             var p=new Dictionary<string,object>{{"level_name","Stage_"+(stageIndex+1)},{"stage_index",stageIndex+1},{"contract_type",contractType??"Standard"},{"success",success?1:0},{"duration_sec",Mathf.RoundToInt(durationSec)},{"stars",stars},{"headshots",headshots},{"accuracy_pct",Mathf.RoundToInt(accuracy*100f)}};
             if(!success && !string.IsNullOrEmpty(failReason)) p["fail_reason"]=failReason.Length>40?failReason.Substring(0,40):failReason;
             TrackCustomEvent("level_end",p);
@@ -190,26 +205,68 @@ namespace GeoSniper
         {
             TrackCustomEvent("ad_reward_view",new Dictionary<string,object>{{"ad_placement",placementTag??"general"},{"success",success?1:0}});
         }
+        public static void TrackAdRequest(string format,string placementTag)
+        {
+            TrackCustomEvent("ad_request",new Dictionary<string,object>{{"ad_format",format??"unknown"},{"ad_placement",placementTag??"general"}});
+        }
+        public static void TrackAdLoaded(string format,string placementTag)
+        {
+            TrackCustomEvent("ad_loaded",new Dictionary<string,object>{{"ad_format",format??"unknown"},{"ad_placement",placementTag??"general"}});
+        }
+        public static void TrackAdLoadFailed(string format,string error)
+        {
+            TrackCustomEvent("ad_load_failed",new Dictionary<string,object>{{"ad_format",format??"unknown"},{"error",error??"unknown"}});
+        }
+        public static void TrackAdImpression(string format,string placementTag)
+        {
+            TrackCustomEvent("ad_impression",new Dictionary<string,object>{{"ad_format",format??"unknown"},{"ad_placement",placementTag??"general"}});
+        }
+        public static void TrackAdShowFailed(string format,string error)
+        {
+            TrackCustomEvent("ad_show_failed",new Dictionary<string,object>{{"ad_format",format??"unknown"},{"error",error??"unknown"}});
+        }
+        static void SendToFirebase(string eventName,Dictionary<string,object> parameters)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                var values=new List<Parameter>();
+                if(parameters!=null) foreach(var pair in parameters)
+                {
+                    if(string.IsNullOrWhiteSpace(pair.Key) || pair.Value==null) continue;
+                    if(pair.Value is int i) values.Add(new Parameter(pair.Key,(long)i));
+                    else if(pair.Value is long l) values.Add(new Parameter(pair.Key,l));
+                    else if(pair.Value is float f) values.Add(new Parameter(pair.Key,(double)f));
+                    else if(pair.Value is double d) values.Add(new Parameter(pair.Key,d));
+                    else values.Add(new Parameter(pair.Key,pair.Value.ToString()));
+                }
+                FirebaseAnalytics.LogEvent(eventName,values.ToArray());
+            }
+            catch(Exception ex){Debug.LogWarning("Firebase Analytics event "+eventName+": "+ex.Message);}
+#endif
+        }
+        static void FlushPendingFirebaseEvents()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if(!firebaseReady || !ConsentGranted) return;
+            for(int i=0;i<pendingEvents.Count;i++) SendToFirebase(pendingEvents[i].Name,pendingEvents[i].Parameters);
+            pendingEvents.Clear();
+#endif
+        }
         public static void TrackCustomEvent(string eventName,Dictionary<string,object> parameters=null)
         {
             if(!ConsentGranted || !ReleaseConfiguration.Current.analyticsEnabled || string.IsNullOrWhiteSpace(eventName)) return;
+            parameters=parameters!=null?new Dictionary<string,object>(parameters):new Dictionary<string,object>();
+            parameters["app_version"]=Application.version;
+            parameters["session_id"]=SessionId;
+            parameters["is_dev"]=IsDeveloperDevice?1:0;
             if(firebaseReady)
             {
-                try
-                {
-                    var values=new List<Parameter>();
-                    if(parameters!=null) foreach(var pair in parameters)
-                    {
-                        if(string.IsNullOrWhiteSpace(pair.Key) || pair.Value==null) continue;
-                        if(pair.Value is int i) values.Add(new Parameter(pair.Key,(long)i));
-                        else if(pair.Value is long l) values.Add(new Parameter(pair.Key,l));
-                        else if(pair.Value is float f) values.Add(new Parameter(pair.Key,(double)f));
-                        else if(pair.Value is double d) values.Add(new Parameter(pair.Key,d));
-                        else values.Add(new Parameter(pair.Key,pair.Value.ToString()));
-                    }
-                    FirebaseAnalytics.LogEvent(eventName,values.ToArray());
-                }
-                catch(Exception ex){Debug.LogWarning("Firebase Analytics event "+eventName+": "+ex.Message);}
+                SendToFirebase(eventName,parameters);
+            }
+            else
+            {
+                if(pendingEvents.Count<50) pendingEvents.Add(new QueuedEvent{Name=eventName,Parameters=parameters});
             }
             if(unityReady)
             {

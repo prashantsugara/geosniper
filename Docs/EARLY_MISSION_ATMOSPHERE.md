@@ -1,0 +1,9 @@
+# Early mission atmosphere and field interactions
+
+The opening sequence retains its existing rooftop scout, VIP protection, moving courier, stealth security ring, document retrieval, then relay sabotage progression. Stages four through six now provide a short contextual hint after the initial narration, once per deployment, when the HUD is not showing another notice. No new pregame screen is introduced.
+
+Campaign audio retains four pooled spatial impact sources and adds two fixed, cached twelve-second ambience loops. A quiet exterior road/wind wash crossfades into interior room tone using the generated building footprint. Map/blocked states and lost focus fade the loops out. Narration and existing radio callouts duck the bed. Mute affects both loops. Indoor footsteps use the concrete set and slightly lower volume.
+
+Document retrieval verifies the file first, then visibly lifts and tilts the folder from the desk. Relay interaction checks the power feed for the first 65 percent, then pulls the disconnect lever; its indicator is amber during isolation and dark when switched off. Cancelling resets the visual pose. The reach check uses the original desk position so animation cannot extend interaction range. Damage clears timed action input and progress. Changing objectives clears old progress and restores unfinished visuals. Witness release now uses the same three-second action duration in both input and HUD.
+
+Verification: C# compilation and disposable Unity campaign checks cover bounded/reused sources, indoor crossfade, blocked fade and mute, one-shot contextual guidance, animated document/relay phases, reach invariance, damage interruption and campaign setups. ADB is installed, but no Android device is connected; phone gameplay and audio balance cannot be verified in this session.

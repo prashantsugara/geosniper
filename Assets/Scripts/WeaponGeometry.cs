@@ -4,18 +4,20 @@ namespace GeoSniper
 {
     public static class WeaponGeometry
     {
-        public static float Length(int index) => index==0?1.25f:index==2?1.02f:1.08f;
+        public static float Length(int index) => WeaponCatalog.Get(index).Length;
         // One metre-based calibration for both the loadout showcase and the first-person model.
         public static bool Configure(Transform model,Transform holder,int index)
         {
             ImportedVisual.SanitizeWeaponModel(model);
+            WeaponAuthoredMaterials.Apply(model);
+            WeaponAuthoredMaterials.ApplyFinish(model);
             if (model.name.Contains("FPSSniperRifle"))
             {
                 model.localRotation = Quaternion.identity;
             }
             else
             {
-                model.localRotation=index==0?Quaternion.Euler(-90,180,0):index==1?Quaternion.Euler(0,90,0):Quaternion.Euler(0,180,0);
+                model.localRotation=index>=3?Quaternion.Euler(0,180,0):index==0?Quaternion.Euler(-90,180,0):index==1?Quaternion.Euler(0,90,0):Quaternion.Euler(0,180,0);
             }
             var bounds=GunBounds(model, holder);
             if(!Usable(bounds)) { model.gameObject.SetActive(false); Debug.LogError("Invalid weapon geometry: "+model.name); return false; }
@@ -37,7 +39,7 @@ namespace GeoSniper
             model.localPosition-=grip;
             bounds=GunBounds(model,holder);
             float boreY=barrelPart!=null?ImportedVisual.RendererBounds(holder,barrelPart).center.y:bounds.center.y;
-            WeaponGripPose.Markers(holder,index==0?.30f:index==1?.27f:.24f,Mathf.Abs(bounds.min.z),
+            WeaponGripPose.Markers(holder,index==7?.055f:index==6?.16f:index==0?.30f:index==1?.27f:.24f,Mathf.Abs(bounds.min.z),
                 new Vector3(bounds.center.x,boreY,bounds.max.z));
             return true;
         }

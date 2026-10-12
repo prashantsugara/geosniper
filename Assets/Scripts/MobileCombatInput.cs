@@ -18,24 +18,31 @@ namespace GeoSniper
         public bool KnifeKillPressed = false;
         public bool IsPointerOverUI { get; private set; }
 
-        public int SelectedWeaponIndex = 0;
+        public int SelectedWeaponIndex = WeaponCatalog.StarterPrimary;
         public bool WeaponSwitchTriggered = false;
-        public string[] WeaponSlotNames = new string[] { "BARRETT .50", "M24 TAC", "MK12 SPR" };
-        public string[] WeaponSlotAmmo = new string[] { "5 / 25", "20 / 60", "30 / 90" };
+        public string[] WeaponSlotNames = System.Array.ConvertAll(WeaponCatalog.All,g=>g.Name);
+        public string[] WeaponSlotAmmo = System.Array.ConvertAll(WeaponCatalog.All,g=>g.Magazine+" / "+g.Magazine);
 
-        bool WeaponOwned(int index)
+        bool WeaponOwned(int index) => WeaponCatalog.Owned(index);
+        public bool CanSelectWeaponSlot(int index) => !ShowHoldBreath && OwnedWeaponCount()>1 && WeaponOwned(DockWeapon(index));
+        int OwnedWeaponCount() { int count=0;for(int i=0;i<WeaponCatalog.Count;i++)if(WeaponOwned(i))count++;return count; }
+        bool ExpandedDock() { for(int i=3;i<WeaponCatalog.Count;i++)if(WeaponOwned(i))return true;return false; }
+        int DockWeapon(int slot)
         {
-            if (GeoSniperGame.IsDebugMode) return true;
-            return PlayerPrefs.GetInt("GeoSniper.WeaponUnlocked_" + index, index == 1 ? 1 : 0) == 1;
+            if(OwnedWeaponCount()<=2)
+            {
+                if(slot==0)return WeaponCatalog.StarterPrimary;
+                if(slot==1)return WeaponCatalog.StarterSecondary;
+                return -1;
+            }
+            if(!ExpandedDock())return slot;
+            int current=Mathf.Clamp(SelectedWeaponIndex,0,WeaponCatalog.Count-1);
+            if(slot==1)return current;
+            int direction=slot==0?-1:1;
+            for(int step=1;step<WeaponCatalog.Count;step++)
+            { int candidate=(current+direction*step+WeaponCatalog.Count)%WeaponCatalog.Count;if(WeaponOwned(candidate))return candidate; }
+            return current;
         }
-        public bool CanSelectWeaponSlot(int index) => !ShowHoldBreath && OwnedWeaponCount() > 1 && WeaponOwned(index);
-        int OwnedWeaponCount()
-        {
-            int count = 0;
-            for (int i = 0; i < 3; i++) if (WeaponOwned(i)) count++;
-            return count;
-        }
-
         int moveFinger = -1, lookFinger = -1, leftFireFinger = -1, rightFireFinger = -1, breathFinger = -1;
 
         enum MouseControlKind { None, Move, Look, LeftFire, RightFire, Breath }
@@ -43,28 +50,37 @@ namespace GeoSniper
         Vector2 mouseLastScreenPos;
 
         public static float Scale => Mathf.Max(.4f, Mathf.Min(Screen.height / 720f, Screen.width / 800f));
-        public static Rect Safe => new Rect(Screen.safeArea.x / Scale, (Screen.height - Screen.safeArea.yMax) / Scale, Screen.safeArea.width / Scale, Screen.safeArea.height / Scale);
-        public static Vector2 LeftCenter => new Vector2(Safe.x + 150, Safe.yMax - 140);
+        public static Rect Safe
+        {
+            get
+            {
+                Rect safe = Screen.safeArea;
+                if (safe.width <= 0 || safe.height <= 0) safe = new Rect(0, 0, Mathf.Max(1, Screen.width), Mathf.Max(1, Screen.height));
+                return new Rect(safe.x / Scale, (Screen.height - safe.yMax) / Scale, safe.width / Scale, safe.height / Scale);
+            }
+        }
+        public static Rect MovementRect => MobileControlLayout.GetRect(MobileControl.Move);
+        public static Vector2 LeftCenter => MovementRect.center;
 
         // PUBG / CoD Mobile Style Ergonomic Layout
-        public static Rect LeftFireRect => new Rect(Safe.x + 75, Safe.yMax - 335, 84, 84);
-        public static Rect RightFireRect => new Rect(Safe.xMax - 245, Safe.yMax - 205, 92, 92);
+        public static Rect LeftFireRect => MobileControlLayout.GetRect(MobileControl.LeftFire);
+        public static Rect RightFireRect => MobileControlLayout.GetRect(MobileControl.RightFire);
 
-        public static Rect ScopeRect => new Rect(Safe.xMax - 145, Safe.yMax - 295, 76, 76);
-        public static Rect JumpRect => new Rect(Safe.xMax - 95, Safe.yMax - 180, 64, 64);
-        public static Rect CrouchRect => new Rect(Safe.xMax - 145, Safe.yMax - 105, 64, 64);
-        public static Rect ReloadRect => new Rect(Safe.xMax - 225, Safe.yMax - 105, 64, 64);
+        public static Rect ScopeRect => MobileControlLayout.GetRect(MobileControl.Scope);
+        public static Rect JumpRect => MobileControlLayout.GetRect(MobileControl.Jump);
+        public static Rect CrouchRect => MobileControlLayout.GetRect(MobileControl.Crouch);
+        public static Rect ReloadRect => MobileControlLayout.GetRect(MobileControl.Reload);
 
-        public static Rect SprintRect => new Rect(Safe.x + 95, Safe.yMax - 235, 60, 60);
-        public static Rect BreathRect => new Rect(Safe.xMax - 235, Safe.yMax - 305, 70, 70);
-        public static Rect FLIRRect => new Rect(Safe.xMax - 315, Safe.yMax - 305, 70, 70);
+        public static Rect SprintRect => MobileControlLayout.GetRect(MobileControl.Sprint);
+        public static Rect BreathRect => MobileControlLayout.GetRect(MobileControl.Breath);
+        public static Rect FLIRRect => MobileControlLayout.GetRect(MobileControl.FLIR);
         public static bool FLIRActive;
-        public static Rect KnifeKillRect => new Rect(Safe.xMax - 315, Safe.yMax - 185, 78, 78);
+        public static Rect KnifeKillRect => MobileControlLayout.GetRect(MobileControl.Knife);
 
         // Weapon Switcher Dock (3 slots at bottom center)
-        public static Rect WeaponSlot1Rect => new Rect(Safe.center.x - 175, Safe.yMax - 48, 112, 40);
-        public static Rect WeaponSlot2Rect => new Rect(Safe.center.x - 56, Safe.yMax - 48, 112, 40);
-        public static Rect WeaponSlot3Rect => new Rect(Safe.center.x + 63, Safe.yMax - 48, 112, 40);
+        public static Rect WeaponSlot1Rect => MobileControlLayout.WeaponSlot(MobileControlLayout.GetRect(MobileControl.WeaponDock), 0);
+        public static Rect WeaponSlot2Rect => MobileControlLayout.WeaponSlot(MobileControlLayout.GetRect(MobileControl.WeaponDock), 1);
+        public static Rect WeaponSlot3Rect => MobileControlLayout.WeaponSlot(MobileControlLayout.GetRect(MobileControl.WeaponDock), 2);
 
         // Procedural High-Definition Anti-Aliased Vector Icons
         static Texture2D discBgTex;
@@ -113,8 +129,10 @@ namespace GeoSniper
                     // Subtle inner bezel (r around 46)
                     float bezelA = Mathf.Clamp01(1.5f - Mathf.Abs(d - 46f)) * 0.25f;
 
-                    Color normFill = new Color(0.025f, 0.035f, 0.045f, 0.48f * fillA);
-                    Color normRing = new Color(0.85f, 0.92f, 1.00f, 0.35f * ringA + bezelA * 0.5f);
+                    Color normFill = Color.Lerp(new Color(.025f,.045f,.07f),new Color(.18f,.23f,.29f),y/(float)(S-1));
+                    normFill.a=.78f*fillA;
+                    Color normRing = Color.Lerp(new Color(.24f,.32f,.40f),new Color(.70f,.80f,.88f),y/(float)(S-1));
+                    normRing.a=.8f*ringA+bezelA*.6f;
                     var normal=Color.Lerp(normFill,normRing,Mathf.Clamp01(ringA+bezelA));
                     normal.a=Mathf.Clamp01(normFill.a+normRing.a);pxNormal[y*S+x]=normal;
 
@@ -356,6 +374,7 @@ namespace GeoSniper
 
         void Update()
         {
+            if (MobileControlLayout.Editing) { ResetTouches(); IsPointerOverUI = true; return; }
             Look = Vector2.zero;
             JumpPressed = ScopePressed = ReloadPressed = CrouchPressed = FLIRPressed = false;
             FirePressed = false;
@@ -366,8 +385,9 @@ namespace GeoSniper
             // 1. Process Multi-touch inputs (Mobile & Touch Screen)
             if (Input.touchCount > 0)
             {
-                foreach (var touch in Input.touches)
+                for (int touchIndex = 0; touchIndex < Input.touchCount; touchIndex++)
                 {
+                    var touch = Input.GetTouch(touchIndex);
                     Vector2 p = new Vector2(touch.position.x, Screen.height - touch.position.y) / Scale;
                     if (touch.phase == TouchPhase.Began)
                     {
@@ -386,18 +406,18 @@ namespace GeoSniper
                         }
                         else if (ShowHoldBreath && BreathRect.Contains(p)) { breathFinger = touch.fingerId; IsPointerOverUI = true; }
                         else if (ShowHoldBreath && FLIRRect.Contains(p)) { FLIRPressed = true; IsPointerOverUI = true; }
-                        else if (CanSelectWeaponSlot(0) && WeaponSlot1Rect.Contains(p)) { SelectedWeaponIndex = 0; WeaponSwitchTriggered = true; IsPointerOverUI = true; }
-                        else if (CanSelectWeaponSlot(1) && WeaponSlot2Rect.Contains(p)) { SelectedWeaponIndex = 1; WeaponSwitchTriggered = true; IsPointerOverUI = true; }
-                        else if (CanSelectWeaponSlot(2) && WeaponSlot3Rect.Contains(p)) { SelectedWeaponIndex = 2; WeaponSwitchTriggered = true; IsPointerOverUI = true; }
-                        else if (Vector2.Distance(p, LeftCenter) < 120 && moveFinger < 0) { moveFinger = touch.fingerId; IsPointerOverUI = true; }
-                        else if (p.y < 44 || (p.x < 100 && p.y < 230) || (p.x > Safe.xMax - 220 && p.y < 360)) { IsPointerOverUI = true; }
-                        else if (p.x > Safe.center.x && lookFinger < 0) { lookFinger = touch.fingerId; }
+                        else if (CanSelectWeaponSlot(0) && WeaponSlot1Rect.Contains(p)) { SelectedWeaponIndex = DockWeapon(0); WeaponSwitchTriggered = true; IsPointerOverUI = true; }
+                        else if (CanSelectWeaponSlot(1) && WeaponSlot2Rect.Contains(p)) { SelectedWeaponIndex = DockWeapon(1); WeaponSwitchTriggered = true; IsPointerOverUI = true; }
+                        else if (CanSelectWeaponSlot(2) && WeaponSlot3Rect.Contains(p)) { SelectedWeaponIndex = DockWeapon(2); WeaponSwitchTriggered = true; IsPointerOverUI = true; }
+                        else if (MovementRect.Contains(p) && moveFinger < 0) { moveFinger = touch.fingerId; IsPointerOverUI = true; }
+                        else if (MobileControlLayout.ReservedUIContains(p, Safe)) { IsPointerOverUI = true; }
+                        else if ((MobileControlLayout.AimOnLeft ? p.x < Safe.center.x : p.x > Safe.center.x) && lookFinger < 0) { lookFinger = touch.fingerId; }
                     }
 
                     bool ended = touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled;
                     if (touch.fingerId == moveFinger)
                     {
-                        var delta = (p - LeftCenter) / 75;
+                        var delta = (p - LeftCenter) / Mathf.Max(1, MovementRect.width * (75f / 180f));
                         Move = ended ? Vector2.zero : Vector2.ClampMagnitude(new Vector2(delta.x, -delta.y), 1);
                         if (ended) moveFinger = -1;
                         else IsPointerOverUI = true;
@@ -442,7 +462,7 @@ namespace GeoSniper
                                (!ShowHoldBreath && SprintRect.Contains(mouseP)) || (ShowHoldBreath && BreathRect.Contains(mouseP)) ||
                                (ShowHoldBreath && FLIRRect.Contains(mouseP)) ||
                                (CanSelectWeaponSlot(0) && WeaponSlot1Rect.Contains(mouseP)) || (CanSelectWeaponSlot(1) && WeaponSlot2Rect.Contains(mouseP)) || (CanSelectWeaponSlot(2) && WeaponSlot3Rect.Contains(mouseP)) ||
-                               Vector2.Distance(mouseP, LeftCenter) < 120 || mouseP.y < 44 || (mouseP.x < 100 && mouseP.y < 230) || (mouseP.x > Safe.xMax - 220 && mouseP.y < 360);
+                               MovementRect.Contains(mouseP) || MobileControlLayout.ReservedUIContains(mouseP, Safe);
 
                 if (inButton || mouseActive != MouseControlKind.None)
                 {
@@ -466,10 +486,10 @@ namespace GeoSniper
                     }
                     else if (ShowHoldBreath && BreathRect.Contains(mouseP)) mouseActive = MouseControlKind.Breath;
                     else if (ShowHoldBreath && FLIRRect.Contains(mouseP)) FLIRPressed = true;
-                    else if (CanSelectWeaponSlot(0) && WeaponSlot1Rect.Contains(mouseP)) { SelectedWeaponIndex = 0; WeaponSwitchTriggered = true; }
-                    else if (CanSelectWeaponSlot(1) && WeaponSlot2Rect.Contains(mouseP)) { SelectedWeaponIndex = 1; WeaponSwitchTriggered = true; }
-                    else if (CanSelectWeaponSlot(2) && WeaponSlot3Rect.Contains(mouseP)) { SelectedWeaponIndex = 2; WeaponSwitchTriggered = true; }
-                    else if (Vector2.Distance(mouseP, LeftCenter) < 120) mouseActive = MouseControlKind.Move;
+                    else if (CanSelectWeaponSlot(0) && WeaponSlot1Rect.Contains(mouseP)) { SelectedWeaponIndex = DockWeapon(0); WeaponSwitchTriggered = true; }
+                    else if (CanSelectWeaponSlot(1) && WeaponSlot2Rect.Contains(mouseP)) { SelectedWeaponIndex = DockWeapon(1); WeaponSwitchTriggered = true; }
+                    else if (CanSelectWeaponSlot(2) && WeaponSlot3Rect.Contains(mouseP)) { SelectedWeaponIndex = DockWeapon(2); WeaponSwitchTriggered = true; }
+                    else if (MovementRect.Contains(mouseP)) mouseActive = MouseControlKind.Move;
                 }
 
                 if (Input.GetMouseButton(0))
@@ -479,7 +499,7 @@ namespace GeoSniper
 
                     if (mouseActive == MouseControlKind.Move)
                     {
-                        var delta = (mouseP - LeftCenter) / 75;
+                        var delta = (mouseP - LeftCenter) / Mathf.Max(1, MovementRect.width * (75f / 180f));
                         Move = Vector2.ClampMagnitude(new Vector2(delta.x, -delta.y), 1);
                     }
                     else if (mouseActive == MouseControlKind.RightFire || mouseActive == MouseControlKind.LeftFire)
@@ -514,13 +534,16 @@ namespace GeoSniper
         void OnApplicationFocus(bool focus) { if (!focus) ResetTouches(); }
         void OnDisable() { ResetTouches(); }
 
-        void ModernHUDButton(Rect rect, Texture2D icon, Color tint, bool active, string badge = null, bool isFire = false)
+        static Color WithOpacity(Color color, float opacity) { color.a *= opacity; return color; }
+        bool studyHud;
+        void ModernHUDButton(MobileControl control, Rect rect, Texture2D icon, Color tint, bool active, string badge = null, bool isFire = false)
         {
             InitProceduralHUD();
+            float opacity = MobileControlLayout.Opacity(control);
             var bg = active ? (isFire ? (discBgFireActiveTex != null ? discBgFireActiveTex : discBgActiveTex) : discBgActiveTex) : discBgTex;
             if (bg != null)
             {
-                GUI.color = active ? (isFire ? new Color(1f, 0.95f, 0.85f, 0.98f) : new Color(1f, 1f, 1f, 0.98f)) : new Color(1f, 1f, 1f, 0.72f);
+                GUI.color = WithOpacity(active ? (isFire ? new Color(1f, 0.95f, 0.85f, 0.98f) : new Color(1f, 1f, 1f, 0.98f)) : new Color(1f, 1f, 1f, studyHud?.42f:.92f), opacity);
                 GUI.DrawTexture(rect, bg);
             }
 
@@ -528,7 +551,7 @@ namespace GeoSniper
             {
                 float iconPadding = rect.width * 0.22f;
                 Rect iconRect = new Rect(rect.x + iconPadding, rect.y + iconPadding, rect.width - iconPadding * 2, rect.height - iconPadding * 2);
-                GUI.color = active ? (isFire ? new Color(1f, 0.98f, 0.85f, 1f) : Color.white) : tint;
+                GUI.color = WithOpacity(active ? (isFire ? new Color(1f, 0.98f, 0.85f, 1f) : Color.white) : tint, opacity);
                 GUI.DrawTexture(iconRect, icon);
             }
 
@@ -536,10 +559,10 @@ namespace GeoSniper
             {
                 var badgeStyle = GUIStyleCache.Get(11,FontStyle.Bold,TextAnchor.MiddleCenter,
                     active ? (isFire ? TacticalGUI.AccentGold : TacticalGUI.AccentCyan) : new Color(.92f,.95f,.98f));
-                Rect labelRect=new Rect(rect.x-10,rect.yMax-6,rect.width+20,16);
-                GUI.color=new Color(.015f,.025f,.035f,.68f);
+                Rect labelRect=MobileControlLayout.Clamp(new Rect(rect.x-10,rect.yMax-6,rect.width+20,16),Safe);
+                GUI.color=new Color(.015f,.025f,.035f,.68f * opacity);
                 GUI.DrawTexture(new Rect(rect.center.x-32,labelRect.y,64,16),Texture2D.whiteTexture);
-                GUI.color = Color.white;
+                GUI.color = WithOpacity(Color.white, opacity);
                 GUI.Label(labelRect, badge, badgeStyle);
             }
             GUI.color = Color.white;
@@ -548,17 +571,20 @@ namespace GeoSniper
         void ModernWeaponSlot(Rect rect, string name, int index, bool active, string ammoText)
         {
             InitProceduralHUD();
+            float opacity = MobileControlLayout.Opacity(MobileControl.WeaponDock);
             Color bg = active ? new Color(0.04f, 0.22f, 0.32f, 0.78f) : new Color(0.03f, 0.06f, 0.10f, 0.55f);
             Color border = active ? TacticalGUI.AccentCyan : new Color(0.25f, 0.35f, 0.45f, 0.35f);
 
-            TacticalGUI.DrawPanel(rect, bg, border, active ? 1.8f : 1.0f);
+            TacticalGUI.DrawPanel(rect, WithOpacity(bg, opacity), WithOpacity(border, opacity), active ? 1.8f : 1.0f);
 
             if (active)
             {
-                GUI.color = TacticalGUI.AccentCyan;
+                GUI.color = WithOpacity(TacticalGUI.AccentCyan, opacity);
                 GUI.DrawTexture(new Rect(rect.x + 4, rect.y + 4, 3, rect.height - 8), Texture2D.whiteTexture);
-                GUI.color = Color.white;
+                GUI.color = WithOpacity(Color.white, opacity);
             }
+
+            GUI.color = WithOpacity(Color.white, opacity);
 
             var nameStyle = new GUIStyle(GUI.skin.label)
             {
@@ -577,6 +603,7 @@ namespace GeoSniper
                 normal = { textColor = active ? TacticalGUI.AccentGold : new Color(0.75f, 0.80f, 0.86f, 0.8f) }
             };
             GUI.Label(new Rect(rect.x + 8, rect.y, rect.width - 16, rect.height - 4), ammoText, ammoStyle);
+            GUI.color = Color.white;
         }
 
         void OnGUI()
@@ -586,8 +613,55 @@ namespace GeoSniper
             DrawControls();
         }
 
+        public static void DrawLayoutPreviewControl(MobileControl control, Rect rect, float opacity, bool selected)
+        {
+            InitProceduralHUD();
+            GUI.color = new Color(1, 1, 1, opacity);
+            Texture2D icon;
+            switch (control)
+            {
+                case MobileControl.Move: icon = joystickRingTex; break;
+                case MobileControl.LeftFire: case MobileControl.RightFire: icon = iconBullet; break;
+                case MobileControl.Scope: icon = iconScope; break;
+                case MobileControl.Jump: icon = iconJump; break;
+                case MobileControl.Crouch: icon = iconCrouch; break;
+                case MobileControl.Reload: icon = iconReload; break;
+                case MobileControl.Sprint: icon = iconSprint; break;
+                case MobileControl.Knife: icon = iconKnife; break;
+                case MobileControl.Breath: icon = iconBreath; break;
+                case MobileControl.FLIR: icon = iconFLIR; break;
+                default: icon = null; break;
+            }
+            if (control != MobileControl.Move && control != MobileControl.WeaponDock) GUI.DrawTexture(rect, discBgTex);
+            if (icon != null)
+            {
+                float pad = control == MobileControl.Move ? 0 : rect.width * .24f;
+                GUI.DrawTexture(new Rect(rect.x + pad, rect.y + pad, rect.width - pad * 2, rect.height - pad * 2), icon);
+            }
+            if (control == MobileControl.WeaponDock)
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    var slot = MobileControlLayout.WeaponSlot(rect, i);
+                    CommandGUI.Fill(slot, new Color(.12f, .22f, .28f, opacity));
+                    GUI.Label(slot, "RIFLE " + (i + 1), GUIStyleCache.Get(10, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white));
+                }
+            }
+            else GUI.Label(new Rect(rect.x - 8, rect.yMax - 6, rect.width + 16, 20), MobileControlLayout.Name(control), GUIStyleCache.Get(10, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white));
+            GUI.color = Color.white;
+            if (selected)
+            {
+                CommandGUI.Fill(new Rect(rect.x, rect.y, rect.width, 2), CommandGUI.AccentCyan);
+                CommandGUI.Fill(new Rect(rect.x, rect.yMax - 2, rect.width, 2), CommandGUI.AccentCyan);
+                CommandGUI.Fill(new Rect(rect.x, rect.y, 2, rect.height), CommandGUI.AccentCyan);
+                CommandGUI.Fill(new Rect(rect.xMax - 2, rect.y, 2, rect.height), CommandGUI.AccentCyan);
+            }
+        }
+
         public void DrawControls()
         {
+            if (MobileControlLayout.Editing) return;
+            studyHud=SectorWorld.ActiveFeatures!=null && SectorWorld.ActiveFeatures.Exists(f=>MapFeatureStyle.Text(f,"street_study")=="true");
             InitProceduralHUD();
             var previous = GUI.matrix;
             GUI.matrix = Matrix4x4.Scale(Vector3.one * Scale);
@@ -597,20 +671,21 @@ namespace GeoSniper
             // Left Joystick (PUBG / COD floating translucent HUD)
             if (joystickRingTex != null)
             {
-                GUI.color = new Color(1f, 1f, 1f, 0.7f);
-                GUI.DrawTexture(new Rect(LeftCenter.x - 90, LeftCenter.y - 90, 180, 180), joystickRingTex);
+                GUI.color = new Color(1f, 1f, 1f, (studyHud?.34f:.7f) * MobileControlLayout.Opacity(MobileControl.Move));
+                GUI.DrawTexture(MovementRect, joystickRingTex);
             }
-            Vector2 knobPos = LeftCenter + new Vector2(Move.x, -Move.y) * 60;
+            Vector2 knobPos = LeftCenter + new Vector2(Move.x, -Move.y) * (MovementRect.width / 3);
             if (joystickKnobTex != null)
             {
-                GUI.color = Color.white;
-                GUI.DrawTexture(new Rect(knobPos.x - 36, knobPos.y - 36, 72, 72), joystickKnobTex);
+                float knob = MovementRect.width * .4f;
+                GUI.color = WithOpacity(Color.white, MobileControlLayout.Opacity(MobileControl.Move));
+                GUI.DrawTexture(new Rect(knobPos.x - knob / 2, knobPos.y - knob / 2, knob, knob), joystickKnobTex);
             }
 
             // PUBG/COD Mobile Semi-Transparent Vector Controls
             // Left & Right Fire with fiery combustion flare on active press
-            ModernHUDButton(LeftFireRect, iconBullet, new Color(1.0f, 0.4f, 0.35f, 0.85f), leftFireFinger >= 0 || mouseActive == MouseControlKind.LeftFire, "FIRE", isFire: true);
-            ModernHUDButton(RightFireRect, iconBullet, new Color(1.0f, 0.3f, 0.25f, 0.95f), rightFireFinger >= 0 || mouseActive == MouseControlKind.RightFire, "AIM/FIRE", isFire: true);
+            ModernHUDButton(MobileControl.LeftFire, LeftFireRect, iconBullet, new Color(1.0f, 0.4f, 0.35f, 0.85f), leftFireFinger >= 0 || mouseActive == MouseControlKind.LeftFire, "FIRE", isFire: true);
+            ModernHUDButton(MobileControl.RightFire, RightFireRect, iconBullet, new Color(1.0f, 0.3f, 0.25f, 0.95f), rightFireFinger >= 0 || mouseActive == MouseControlKind.RightFire, "AIM/FIRE", isFire: true);
 
             bool isScoped = ShowHoldBreath;
 
@@ -621,30 +696,30 @@ namespace GeoSniper
                 {
                     float pulse = 1f + 0.08f * Mathf.Sin(Time.time * 9f);
                     Rect pulseRect = new Rect(KnifeKillRect.x - (KnifeKillRect.width * (pulse - 1f) * 0.5f), KnifeKillRect.y - (KnifeKillRect.height * (pulse - 1f) * 0.5f), KnifeKillRect.width * pulse, KnifeKillRect.height * pulse);
-                    ModernHUDButton(pulseRect, iconKnife, new Color(1.0f, 0.22f, 0.22f, 0.98f), true, "TAKEDOWN", isFire: true);
+                    ModernHUDButton(MobileControl.Knife, pulseRect, iconKnife, new Color(1.0f, 0.22f, 0.22f, 0.98f), true, "TAKEDOWN", isFire: true);
                 }
                 else
                 {
-                    ModernHUDButton(KnifeKillRect, iconKnife, new Color(0.88f, 0.92f, 0.98f, 0.85f), KnifeKillPressed, "KNIFE");
+                    ModernHUDButton(MobileControl.Knife, KnifeKillRect, iconKnife, new Color(0.88f, 0.92f, 0.98f, 0.85f), KnifeKillPressed, "KNIFE");
                 }
             }
 
             // Scope Optic (Toggles ADS / UNSCOPE)
-            ModernHUDButton(ScopeRect, iconScope, isScoped ? TacticalGUI.AccentGold : TacticalGUI.AccentCyan, ScopePressed, isScoped ? "UNSCOPE" : "ADS");
+            ModernHUDButton(MobileControl.Scope, ScopeRect, iconScope, isScoped ? TacticalGUI.AccentGold : TacticalGUI.AccentCyan, ScopePressed, isScoped ? "UNSCOPE" : "ADS");
 
             // Stance Controls (Crouch & Jump)
-            ModernHUDButton(CrouchRect, iconCrouch, IsCrouching ? TacticalGUI.AccentCyan : new Color(0.92f, 0.94f, 0.98f, 0.85f), IsCrouching, IsCrouching ? "CROUCHED" : "CROUCH");
-            if (!isScoped) ModernHUDButton(JumpRect, iconJump, new Color(0.92f, 0.94f, 0.98f, 0.85f), JumpPressed, "JUMP");
+            ModernHUDButton(MobileControl.Crouch, CrouchRect, iconCrouch, IsCrouching ? TacticalGUI.AccentCyan : new Color(0.92f, 0.94f, 0.98f, 0.85f), IsCrouching, IsCrouching ? "CROUCHED" : "CROUCH");
+            if (!isScoped) ModernHUDButton(MobileControl.Jump, JumpRect, iconJump, new Color(0.92f, 0.94f, 0.98f, 0.85f), JumpPressed, "JUMP");
 
             // Reload & Sprint
-            ModernHUDButton(ReloadRect, iconReload, new Color(0.92f, 0.94f, 0.98f, 0.85f), ReloadPressed, "RELOAD");
-            if (!isScoped) ModernHUDButton(SprintRect, iconSprint, Sprint ? TacticalGUI.AccentCyan : new Color(0.75f, 0.8f, 0.9f, 0.75f), Sprint, Sprint ? "LOCKED" : "SPRINT");
+            ModernHUDButton(MobileControl.Reload, ReloadRect, iconReload, new Color(0.92f, 0.94f, 0.98f, 0.85f), ReloadPressed, "RELOAD");
+            if (!isScoped) ModernHUDButton(MobileControl.Sprint, SprintRect, iconSprint, Sprint ? TacticalGUI.AccentCyan : new Color(0.75f, 0.8f, 0.9f, 0.75f), Sprint, Sprint ? "LOCKED" : "SPRINT");
 
             // Hold Breath / Focus Button & FLIR Thermal Optic
             if (isScoped)
             {
-                ModernHUDButton(BreathRect, iconBreath, HoldBreathHeld ? TacticalGUI.AccentGold : TacticalGUI.AccentCyan, HoldBreathHeld, "BREATH");
-                ModernHUDButton(FLIRRect, iconFLIR, FLIRActive ? TacticalGUI.AccentGold : TacticalGUI.AccentCyan, FLIRPressed || FLIRActive, FLIRActive ? "FLIR ON" : "FLIR");
+                ModernHUDButton(MobileControl.Breath, BreathRect, iconBreath, HoldBreathHeld ? TacticalGUI.AccentGold : TacticalGUI.AccentCyan, HoldBreathHeld, "BREATH");
+                ModernHUDButton(MobileControl.FLIR, FLIRRect, iconFLIR, FLIRActive ? TacticalGUI.AccentGold : TacticalGUI.AccentCyan, FLIRPressed || FLIRActive, FLIRActive ? "FLIR ON" : "FLIR");
             }
 
             // Only show weapon switching when the player owns multiple rifles and is unscoped.
@@ -653,14 +728,16 @@ namespace GeoSniper
             {
                 if (OwnedWeaponCount() > 1)
                 {
-                    if (WeaponOwned(0)) ModernWeaponSlot(WeaponSlot1Rect, WeaponSlotNames[0], 0, SelectedWeaponIndex == 0, WeaponSlotAmmo[0]);
-                    if (WeaponOwned(1)) ModernWeaponSlot(WeaponSlot2Rect, WeaponSlotNames[1], 1, SelectedWeaponIndex == 1, WeaponSlotAmmo[1]);
-                    if (WeaponOwned(2)) ModernWeaponSlot(WeaponSlot3Rect, WeaponSlotNames[2], 2, SelectedWeaponIndex == 2, WeaponSlotAmmo[2]);
+                    int dock0=DockWeapon(0);if(WeaponOwned(dock0)) ModernWeaponSlot(WeaponSlot1Rect, WeaponSlotNames[dock0], dock0, SelectedWeaponIndex==dock0, WeaponSlotAmmo[dock0]);
+                    int dock1=DockWeapon(1);if(WeaponOwned(dock1)) ModernWeaponSlot(WeaponSlot2Rect, WeaponSlotNames[dock1], dock1, SelectedWeaponIndex==dock1, WeaponSlotAmmo[dock1]);
+                    int dock2=DockWeapon(2);if(WeaponOwned(dock2)) ModernWeaponSlot(WeaponSlot3Rect, WeaponSlotNames[dock2], dock2, SelectedWeaponIndex==dock2, WeaponSlotAmmo[dock2]);
                 }
                 else
                 {
                     var singleStyle = new GUIStyle(GUI.skin.label) { fontSize = 10, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, normal = { textColor = TacticalGUI.AccentCyan } };
-                    GUI.Label(new Rect(Safe.center.x - 82, Safe.yMax - 34, 164, 24), WeaponSlotNames[Mathf.Clamp(SelectedWeaponIndex, 0, 2)] + "  â€¢  EQUIPPED", singleStyle);
+                    GUI.color = WithOpacity(Color.white, MobileControlLayout.Opacity(MobileControl.WeaponDock));
+                    GUI.Label(MobileControlLayout.GetRect(MobileControl.WeaponDock), WeaponSlotNames[Mathf.Clamp(SelectedWeaponIndex, 0, WeaponCatalog.Count-1)] + "  //  EQUIPPED", singleStyle);
+                    GUI.color = Color.white;
                 }
             }
 

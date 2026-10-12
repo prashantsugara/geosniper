@@ -12,8 +12,8 @@ namespace GeoSniper
             var pixels = new Color32[Size * Size];
             float scale = Size / span;
 
-            // 1. Light street-map canvas
-            Color32 bgCanvas = new Color32(242, 244, 239, 255);
+            // Dark reconnaissance palette, using actual loaded vector geometry.
+            Color32 bgCanvas = new Color32(13, 24, 31, 255);
             for (int i = 0; i < pixels.Length; i++) pixels[i] = bgCanvas;
 
             // 2. Sector ground (slightly lighter dark)
@@ -23,7 +23,7 @@ namespace GeoSniper
                 var corners = new List<Vector2>();
                 foreach (var p in new[] { new Vector2(-320, -320), new Vector2(320, -320), new Vector2(320, 320), new Vector2(-320, 320) })
                     corners.Add(Project(world, p, origin, scale));
-                Fill(pixels, corners, new Color32(242, 244, 239, 255));
+                Fill(pixels, corners, new Color32(13, 24, 31, 255));
             }
 
             // 3. Layered Overture Vector Map Elements (Land Use -> Water -> Park -> Building -> Road)
@@ -40,12 +40,12 @@ namespace GeoSniper
                         try {
                             var triangles=WaterGeometry.Triangles(f.WaterRings);
                             for(int i=0;i<triangles.Count;i+=3)
-                                Fill(pixels,ProjectPoints(world,triangles.GetRange(i,3),origin,scale),new Color(.67f,.83f,.95f));
+                                Fill(pixels,ProjectPoints(world,triangles.GetRange(i,3),origin,scale),new Color(.025f,.13f,.20f));
                         } catch(System.FormatException) { }
                     }
                     else {
                         var points = ProjectPoints(world, f.Points, origin, scale);
-                        Fill(pixels, points, new Color(.67f, .83f,.95f));
+                        Fill(pixels, points, new Color(.025f,.13f,.20f));
                     }
                 }
             }
@@ -62,11 +62,11 @@ namespace GeoSniper
                     
                     if (f.Kind == "park" || cls == "park" || cls == "forest" || cls == "grass")
                     {
-                        Fill(pixels, points, new Color(.78f, .88f, .73f));
+                        Fill(pixels, points, new Color(.10f,.22f,.17f));
                     }
                     else if (cls == "military" || cls == "hospital" || cls == "government")
                     {
-                        Fill(pixels, points, new Color(.94f, .90f, .85f));
+                        Fill(pixels, points, new Color(.21f,.24f,.27f));
                     }
                 }
             }
@@ -83,14 +83,14 @@ namespace GeoSniper
                     var shadowPoints = new List<Vector2>();
                     float shadowOffset = Mathf.Clamp(f.Height * 0.1f * scale, 1.5f, 5f);
                     foreach (var p in points) shadowPoints.Add(p + new Vector2(shadowOffset, -shadowOffset));
-                    Fill(pixels, shadowPoints, new Color(.84f, .85f, .82f));
-                    Fill(pixels, points, new Color(.89f, .89f, .86f));
+                    Fill(pixels, shadowPoints, new Color(.025f,.045f,.065f));
+                    Fill(pixels, points, new Color(.20f,.28f,.32f));
 
                     for (int i = 0; i < points.Count; i++)
                     {
                         Vector2 p1 = points[i];
                         Vector2 p2 = points[(i + 1) % points.Count];
-                        Line(pixels, p1, p2, 1.0f, new Color(.79f, .80f, .77f));
+                        Line(pixels, p1, p2, 1.0f, new Color(.34f,.45f,.49f));
                     }
                 }
             }
@@ -112,33 +112,33 @@ namespace GeoSniper
 
                     if (isPath)
                     {
-                        Color pathColor = new Color(.78f, .76f, .71f);
+                        Color pathColor = new Color(.22f,.29f,.28f);
                         for (int i = 1; i < points.Count; i++)
                             Line(pixels, points[i - 1], points[i], rWidth * 0.5f, pathColor);
                     }
                     else if (isHighway)
                     {
-                        Color casing = new Color(.84f, .73f, .49f);
+                        Color casing = new Color(.26f,.31f,.27f);
                         for (int i = 1; i < points.Count; i++)
                             Line(pixels, points[i - 1], points[i], rWidth * 0.8f + 1.5f, casing);
 
-                        Color fill = new Color(1f, .89f, .61f);
+                        Color fill = new Color(.78f,.60f,.32f);
                         for (int i = 1; i < points.Count; i++)
                             Line(pixels, points[i - 1], points[i], rWidth * 0.8f, fill);
                     }
                     else if (isAvenue)
                     {
-                        Color casing = new Color(.82f, .82f, .77f);
+                        Color casing = new Color(.14f,.22f,.25f);
                         for (int i = 1; i < points.Count; i++)
                             Line(pixels, points[i - 1], points[i], rWidth * 0.6f + 1f, casing);
 
-                        Color fill = new Color(1f, .98f, .88f);
+                        Color fill = new Color(.43f,.50f,.46f);
                         for (int i = 1; i < points.Count; i++)
                             Line(pixels, points[i - 1], points[i], rWidth * 0.6f, fill);
                     }
                     else
                     {
-                        Color fill = Color.white;
+                        Color fill = new Color(.29f,.38f,.40f);
                         for (int i = 1; i < points.Count; i++)
                             Line(pixels, points[i - 1], points[i], rWidth * 0.5f, fill);
                     }

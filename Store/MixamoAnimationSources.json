@@ -1,0 +1,57 @@
+[
+  {
+    "file": "Assets/ThirdParty/MixamoSource/enemy_walk.fbx",
+    "title": "Walking / Walking While Aiming Rifle",
+    "source": "https://www.mixamo.com/",
+    "licenseReference": "https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html",
+    "downloaded": "2026-10-07/08",
+    "format": "FBX for Unity, without skin, 30fps, no key reduction",
+    "usage": "Enemy patrol locomotion",
+    "modifications": "Retargeted to each shipped character rig; in-place locomotion; exported as Legacy Unity rotation clips",
+    "sha256": "c4cbbd8556e4d6ea6d201af58967945b47e8307bd1ec01a226335d0648d3527f"
+  },
+  {
+    "file": "Assets/ThirdParty/MixamoSource/enemy_hit.fbx",
+    "title": "Walking Hit Reaction",
+    "source": "https://www.mixamo.com/",
+    "licenseReference": "https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html",
+    "downloaded": "2026-10-07/08",
+    "format": "FBX for Unity, without skin, 30fps, no key reduction",
+    "usage": "Enemy hit reaction with moving feet preserved",
+    "modifications": "Retargeted to each shipped character rig; in-place locomotion; exported as Legacy Unity rotation clips",
+    "sha256": "c1dc0a4b76c3be17a6958b345009b5dfb54bec47a922545dba1d893f14aa359b"
+  },
+  {
+    "file": "Assets/ThirdParty/MixamoSource/civilian_walk.fbx",
+    "title": "Walking / Walking With A Swagger",
+    "source": "https://www.mixamo.com/",
+    "licenseReference": "https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html",
+    "downloaded": "2026-10-07/08",
+    "format": "FBX for Unity, without skin, 30fps, no key reduction",
+    "usage": "Civilian street patrol",
+    "modifications": "Retargeted to each shipped character rig; in-place locomotion; exported as Legacy Unity rotation clips",
+    "sha256": "89aacbdf3830386460a8013ad9f3cc2becbe5ec93f6ea0bacb4262c697b14efb"
+  },
+  {
+    "file": "Assets/ThirdParty/MixamoSource/civilian_fear.fbx",
+    "title": "Terrified",
+    "source": "https://www.mixamo.com/",
+    "licenseReference": "https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html",
+    "downloaded": "2026-10-07/08",
+    "format": "FBX for Unity, without skin, 30fps, no key reduction",
+    "usage": "Civilian fear and nonfatal hit reaction",
+    "modifications": "Retargeted to each shipped character rig; in-place locomotion; exported as Legacy Unity rotation clips",
+    "sha256": "1483d56f5875ecbedbc9550ed0c449a12b641a79fc0a663da5222203277419de"
+  },
+  {
+    "file": "Assets/ThirdParty/MixamoSource/civilian_run.fbx",
+    "title": "Unarmed Run Forward",
+    "source": "https://www.mixamo.com/",
+    "licenseReference": "https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html",
+    "downloaded": "2026-10-07/08",
+    "format": "FBX for Unity, without skin, 30fps, no key reduction",
+    "usage": "Civilian escape locomotion",
+    "modifications": "Retargeted to each shipped character rig; in-place locomotion; exported as Legacy Unity rotation clips",
+    "sha256": "ed064afed79d19b7806a0c54c7536b525bb52c981d78b4c2d56b9919c9dcc73d"
+  }
+]

@@ -31,7 +31,7 @@ namespace GeoSniper
                 }
             }
             meeting.Tick(Time.deltaTime,observing,mapOpen || BallisticsSystem.isBulletCamActive);
-            if(!meeting.Identified && enemies.Count>1 && enemies[1]!=null && !mapOpen)
+            if(!meeting.Identified && contractTarget.ObservationPatrol && enemies.Count>1 && enemies[1]!=null && !mapOpen)
             {
                 Vector3 direction=enemies[1].transform.position-contractTarget.transform.position;direction.y=0;
                 if(direction.sqrMagnitude>.01f) contractTarget.transform.rotation=Quaternion.Slerp(contractTarget.transform.rotation,Quaternion.LookRotation(direction),Time.deltaTime*2);

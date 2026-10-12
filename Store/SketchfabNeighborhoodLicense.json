@@ -1,0 +1,62 @@
+{
+  "title": "Street Props",
+  "source": "https://sketchfab.com/3d-models/street-props-741e544242a9481fa54c1f7bca6e92b2",
+  "creator": "syedraza",
+  "license": {
+    "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+    "label": "CC Attribution",
+    "fullName": "Creative Commons Attribution",
+    "requirements": "Author must be credited. Commercial use is allowed.",
+    "url": "http://creativecommons.org/licenses/by/4.0/",
+    "slug": "by"
+  },
+  "downloaded": "2026-10-06",
+  "changes": "Separated five props, centered and grounded meshes, scaled uniformly to game dimensions, exported FBX and original 1024px atlases.",
+  "models": [
+    {
+      "name": "StreetBench",
+      "triangles": 5048,
+      "size": [
+        2.4,
+        1.455,
+        1.571
+      ]
+    },
+    {
+      "name": "StreetBin",
+      "triangles": 1200,
+      "size": [
+        0.523,
+        0.65,
+        0.908
+      ]
+    },
+    {
+      "name": "DeliveryCrate",
+      "triangles": 108,
+      "size": [
+        0.85,
+        0.85,
+        0.85
+      ]
+    },
+    {
+      "name": "TrafficCone",
+      "triangles": 3960,
+      "size": [
+        0.45,
+        0.45,
+        0.455
+      ]
+    },
+    {
+      "name": "UtilityDrum",
+      "triangles": 1078,
+      "size": [
+        0.65,
+        0.65,
+        1.663
+      ]
+    }
+  ]
+}

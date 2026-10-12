@@ -19,6 +19,7 @@ namespace GeoSniper
         
         public CivilianState currentState = CivilianState.Patrol;
         public bool Suspended;
+        public bool HeldForRescue;
         public float CurrentSpeed { get; private set; }
         public bool isVIP;
         public Vector3 vipDestination;
@@ -56,7 +57,7 @@ namespace GeoSniper
         
         void HearGunshot(Vector3 source,float radius)
         {
-            if (actor == null || actor.IsDead || Suspended) return;
+            if (actor == null || actor.IsDead || Suspended || HeldForRescue) return;
             if(Vector3.Distance(transform.position,source)>=Mathf.Min(80f,radius)) return;
             if (isVIP)
             {
@@ -90,17 +91,37 @@ namespace GeoSniper
                     float away=Vector3.Distance(point,danger)-Vector3.Distance(transform.position,danger);
                     if(away<3f)continue;
                     float score=away-travel*.3f+Random.Range(0f,2f);
-                    if(score>bestScore){bestScore=score;best=point;}
+                    if(score>bestScore && Reachable(point)){bestScore=score;best=point;}
                 }
             }
             if(bestScore>float.NegativeInfinity)return best;
-            // If no street point is safe, avoid inventing a destination in water.
+            // Sparse map spawn points should not trap a civilian in an endless idle loop.
+            for(int i=0;i<16;i++)
+            {
+                float angle=i*Mathf.PI/8;
+                var desired=transform.position+new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle))*Mathf.Lerp(minDistance,maxDistance,(i%3)/2f);
+                if(!NavMesh.SamplePosition(desired,out var hit,2f,NavMesh.AllAreas)
+                    || Mathf.Abs(hit.position.y-transform.position.y)>2 || !SectorWorld.DryFootprint(hit.position,.6f))continue;
+                float away=Vector3.Distance(hit.position,danger)-Vector3.Distance(transform.position,danger);
+                float score=away-Vector3.Distance(hit.position,transform.position)*.3f;
+                if(away>3 && score>bestScore && Reachable(hit.position)){bestScore=score;best=hit.position;}
+            }
+            if(bestScore>float.NegativeInfinity)return best;
             return transform.position;
+        }
+
+        bool Reachable(Vector3 destination)
+        {
+            if(!NavMesh.SamplePosition(transform.position,out var start,3f,NavMesh.AllAreas)
+                || !NavMesh.SamplePosition(destination,out var end,2f,NavMesh.AllAreas))return false;
+            var path=new NavMeshPath();
+            return NavMesh.CalculatePath(start.position,end.position,NavMesh.AllAreas,path)
+                && path.status==NavMeshPathStatus.PathComplete;
         }
         
         void Update()
         {
-            if(actor==null || actor.IsDead || Suspended) { SocialPartner=null;CurrentSpeed=0; lastPosition=transform.position; return; }
+            if(actor==null || actor.IsDead || Suspended || HeldForRescue) { SocialPartner=null;CurrentSpeed=0; lastPosition=transform.position; return; }
             
             if (isVIP)
             {
@@ -216,7 +237,12 @@ namespace GeoSniper
         {
             stateTimer -= Time.deltaTime;
             MoveTowards(targetPos, 1f);
-            if (Vector3.Distance(transform.position, targetPos) < 2f || (blockedTime > 0.5f) || stateTimer <= 0)
+            if(blockedTime>1f)
+            {
+                blockedTime=0;navDestinationSet=false;ChoosePatrolTarget();
+                return;
+            }
+            if (Vector3.Distance(transform.position, targetPos) < 2f || stateTimer <= 0)
             {
                 blockedTime = 0;
                 currentState = CivilianState.Idle;

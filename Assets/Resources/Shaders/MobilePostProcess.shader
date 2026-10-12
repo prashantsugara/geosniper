@@ -132,8 +132,8 @@ Shader "GeoSniper/MobilePostProcess"
                 }
 
                 // Chromatic Aberration
-                float caBase = 0.0015;
-                float caScope = (scopeBlend > 0.01 && distFromCenter < scopeRadius) ? (0.004 * pow(distFromCenter / scopeRadius, 2.0)) : 0.0;
+                float caBase = 0.0;
+                float caScope = (scopeBlend > 0.01 && distFromCenter < scopeRadius) ? (0.001 * pow(distFromCenter / scopeRadius, 2.0)) : 0.0;
                 float2 caOffset = (uv - 0.5) * (caBase + caScope);
 
                 half3 col;

@@ -1,0 +1,137 @@
+{
+  "models": [
+    {
+      "name": "MilitaryTent",
+      "triangles": 2622,
+      "materials": [
+        {
+          "key": "MilitaryTent_0",
+          "maps": {
+            "albedo": "MilitaryTent_0_albedo",
+            "orm": "MilitaryTent_0_orm",
+            "normal": "MilitaryTent_0_normal"
+          }
+        },
+        {
+          "key": "MilitaryTent_1",
+          "maps": {
+            "albedo": "MilitaryTent_1_albedo",
+            "orm": "MilitaryTent_1_orm",
+            "normal": "MilitaryTent_1_normal"
+          }
+        },
+        {
+          "key": "MilitaryTent_2",
+          "maps": {
+            "albedo": "MilitaryTent_2_albedo",
+            "orm": "MilitaryTent_2_orm",
+            "normal": "MilitaryTent_2_normal"
+          }
+        },
+        {
+          "key": "MilitaryTent_3",
+          "maps": {
+            "albedo": "MilitaryTent_3_albedo",
+            "orm": "MilitaryTent_3_orm",
+            "normal": "MilitaryTent_3_normal"
+          }
+        },
+        {
+          "key": "MilitaryTent_4",
+          "maps": {
+            "albedo": "MilitaryTent_4_albedo",
+            "orm": "MilitaryTent_4_orm",
+            "normal": "MilitaryTent_4_normal"
+          }
+        },
+        {
+          "key": "MilitaryTent_5",
+          "maps": {
+            "albedo": "MilitaryTent_5_albedo",
+            "orm": "MilitaryTent_5_orm",
+            "normal": "MilitaryTent_5_normal"
+          }
+        },
+        {
+          "key": "MilitaryTent_6",
+          "maps": {
+            "albedo": "MilitaryTent_6_albedo",
+            "orm": "MilitaryTent_6_orm",
+            "normal": "MilitaryTent_6_normal"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ShopShelf",
+      "triangles": 1112,
+      "materials": [
+        {
+          "key": "ShopShelf_0",
+          "maps": {
+            "albedo": "ShopShelf_0_albedo",
+            "orm": "ShopShelf_0_orm",
+            "normal": "ShopShelf_0_normal"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ShopFridge",
+      "triangles": 352,
+      "materials": [
+        {
+          "key": "ShopFridge_0",
+          "maps": {
+            "albedo": "ShopFridge_0_albedo",
+            "orm": "ShopFridge_0_orm",
+            "normal": "ShopFridge_0_normal"
+          }
+        }
+      ]
+    },
+    {
+      "name": "BrickApartments",
+      "triangles": 6716,
+      "materials": [
+        {
+          "key": "BrickApartments_0",
+          "maps": {
+            "albedo": "BrickApartments_0_albedo",
+            "normal": "BrickApartments_0_normal"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Warehouse",
+      "triangles": 191,
+      "materials": [
+        {
+          "key": "Warehouse_0",
+          "maps": {
+            "albedo": "Warehouse_0_albedo"
+          }
+        },
+        {
+          "key": "Warehouse_1",
+          "maps": {
+            "albedo": "Warehouse_1_albedo"
+          }
+        },
+        {
+          "key": "Warehouse_2",
+          "maps": {
+            "albedo": "Warehouse_2_albedo"
+          }
+        },
+        {
+          "key": "Warehouse_3",
+          "maps": {
+            "albedo": "Warehouse_3_albedo"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -43,76 +43,13 @@ namespace GeoSniper
                 Fill(new Rect(r.x,r.yMax-1,r.width,1),ThemeBorder);
         }
         public static bool DrawButton(Rect r,string text,bool isPrimary=false,int fontSize=16)
-        {
-            bool hover=r.Contains(Event.current.mousePosition) && GUI.enabled;
-            Color bg = isPrimary
-                ? (hover ? new Color(1.0f, 0.70f, 0.20f) : AccentGold)
-                : (hover ? new Color(0.14f, 0.18f, 0.22f) : ThemeCard);
-            Fill(r, bg);
-            // 1px frame border
-            Color bCol = isPrimary ? AccentGold : (hover ? AccentCyan : ThemeBorder);
-            Fill(new Rect(r.x, r.y, r.width, 1), bCol);
-            Fill(new Rect(r.x, r.yMax - 1, r.width, 1), bCol);
-            Fill(new Rect(r.x, r.y, 1, r.height), bCol);
-            Fill(new Rect(r.xMax - 1, r.y, 1, r.height), bCol);
-            if (isPrimary || hover)
-            {
-                Fill(new Rect(r.x, r.y, 4, 2), isPrimary ? ThemeBg : AccentCyan);
-                Fill(new Rect(r.xMax - 4, r.yMax - 2, 4, 2), isPrimary ? ThemeBg : AccentCyan);
-            }
-            Color textCol = isPrimary ? ThemeBg : (hover ? Color.white : (GUI.enabled ? Text : Muted));
-            Label(new Rect(r.x+6,r.y,r.width-12,r.height),text,fontSize,textCol);
-            return IsClicked(r);
-        }
-        public static bool DrawGreenPlayButton(Rect r, string text = "DEPLOY")
-        {
-            bool hover = r.Contains(Event.current.mousePosition) && GUI.enabled;
-            float pulse = Mathf.PingPong(Time.realtimeSinceStartup * 2.5f, 1f);
-            Color glow = Color.Lerp(new Color(0.00f, 0.70f, 0.85f, 0.16f), new Color(0.00f, 0.94f, 1.00f, 0.35f), pulse);
-            DrawGlow(new Rect(r.x - 2, r.y - 2, r.width + 4, r.height + 4), glow);
-
-            Color bg = hover ? new Color(0.05f, 0.14f, 0.18f, 0.98f) : new Color(0.03f, 0.08f, 0.12f, 0.96f);
-            Fill(r, bg);
-
-            Color border = Color.Lerp(new Color(0.00f, 0.75f, 0.90f), AccentCyan, pulse);
-            Fill(new Rect(r.x, r.y, r.width, 2), border);
-            Fill(new Rect(r.x, r.yMax - 2, r.width, 2), border);
-            Fill(new Rect(r.x, r.y, 3, r.height), border);
-            Fill(new Rect(r.xMax - 3, r.y, 3, r.height), border);
-
-            // Chamfer corner accents (tactical optronic ticks)
-            Fill(new Rect(r.x + 6, r.y + 4, 8, 2), AccentGold);
-            Fill(new Rect(r.xMax - 14, r.yMax - 6, 8, 2), AccentGold);
-
-            int fSize = Mathf.Clamp((int)(r.height * 0.34f), 12, 20);
-            GUI.Label(r, text, GUIStyleCache.Get(fSize, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white, true));
-            return IsClicked(r);
-        }
-        public static bool DrawGoldPlayButton(Rect r, string text = "DEPLOY")
-        {
-            bool hover = r.Contains(Event.current.mousePosition) && GUI.enabled;
-            float pulse = Mathf.PingPong(Time.realtimeSinceStartup * 2.5f, 1f);
-            Color glow = Color.Lerp(new Color(0.85f, 0.65f, 0.10f, 0.16f), new Color(1.00f, 0.80f, 0.20f, 0.35f), pulse);
-            DrawGlow(new Rect(r.x - 2, r.y - 2, r.width + 4, r.height + 4), glow);
-
-            Color bg = hover ? new Color(0.18f, 0.14f, 0.04f, 0.98f) : new Color(0.12f, 0.09f, 0.02f, 0.96f);
-            Fill(r, bg);
-
-            Color border = Color.Lerp(new Color(0.85f, 0.65f, 0.10f), AccentGold, pulse);
-            Fill(new Rect(r.x, r.y, r.width, 2), border);
-            Fill(new Rect(r.x, r.yMax - 2, r.width, 2), border);
-            Fill(new Rect(r.x, r.y, 3, r.height), border);
-            Fill(new Rect(r.xMax - 3, r.y, 3, r.height), border);
-
-            // Chamfer corner accents
-            Fill(new Rect(r.x + 6, r.y + 4, 8, 2), AccentCyan);
-            Fill(new Rect(r.xMax - 14, r.yMax - 6, 8, 2), AccentCyan);
-
-            int fSize = Mathf.Clamp((int)(r.height * 0.34f), 12, 20);
-            GUI.Label(r, text, GUIStyleCache.Get(fSize, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white, true));
-            return IsClicked(r);
-        }
-        public static bool DrawGoldStoreButton(Rect r,string text="STORE") => DrawGreenPlayButton(r,text);
+            => GameButtonChrome.Draw(r,text,isPrimary?GameButtonTone.Amber:GameButtonTone.Steel,fontSize);
+        public static bool DrawGreenPlayButton(Rect r,string text="DEPLOY")
+            => GameButtonChrome.Draw(r,text,GameButtonTone.Cyan,Mathf.Clamp((int)(r.height*.34f),12,20));
+        public static bool DrawGoldPlayButton(Rect r,string text="DEPLOY")
+            => GameButtonChrome.Draw(r,text,GameButtonTone.Amber,Mathf.Clamp((int)(r.height*.34f),12,20));
+        public static bool DrawGoldStoreButton(Rect r,string text="STORE")
+            => GameButtonChrome.Draw(r,text,GameButtonTone.Amber,Mathf.Clamp((int)(r.height*.34f),12,20));
         public static void DrawBadge(Rect r,string text,Color accent,int fontSize=13)
         { Fill(r,new Color(.18f,.17f,.13f)); Label(r,text,fontSize,AccentGold); }
         public static void DrawDarkPill(Rect r,string icon,string value,Color color)
@@ -187,22 +124,18 @@ namespace GeoSniper
             {
                 Rect tab = new Rect(r.x + i * tabW, r.y, tabW, r.height);
                 bool active = i == selected;
-                if (active)
-                {
-                    Fill(new Rect(tab.x + 8, tab.y, tab.width - 16, 2.5f), AccentCyan);
-                    Fill(new Rect(tab.x, tab.y, tab.width, tab.height), new Color(AccentCyan.r, AccentCyan.g, AccentCyan.b, 0.05f));
-                }
+                bool pressed=GameButtonChrome.Surface(new Rect(tab.x+5,tab.y+5,tab.width-10,tab.height-10),active);
                 float iconY = tab.y + 7f;
                 float labelY = tab.y + 29f;
                 // Icon
                 GUI.Label(new Rect(tab.x, iconY, tab.width, 20),
                     icons[i], GUIStyleCache.Get(16, FontStyle.Normal, TextAnchor.MiddleCenter,
-                    active ? AccentCyan : Muted, false));
+                    active ? Color.white : Text, false));
                 // Label
                 GUI.Label(new Rect(tab.x, labelY, tab.width, 18),
                     labels[i], GUIStyleCache.Get(10, FontStyle.Bold, TextAnchor.MiddleCenter,
-                    active ? AccentCyan : Muted, false));
-                if (GUI.Button(tab, GUIContent.none, GUIStyle.none) && !active) clicked = i;
+                    active ? Color.white : Text, false));
+                if (pressed && !active) clicked = i;
             }
             return clicked;
         }

@@ -161,6 +161,8 @@ namespace GeoSniper
                 if(string.IsNullOrWhiteSpace(match.Name)) match.Name=extra.Name;
                 if(string.IsNullOrWhiteSpace(match.Landmark)) match.Landmark=extra.Landmark;
                 if(match.Details==null || !match.Details.HasValues) match.Details=extra.Details;
+                else if(!string.IsNullOrWhiteSpace(MapFeatureStyle.Text(extra,"shop")))
+                {match.Details["shop"]=extra.Details["shop"];match.Details["category"]=extra.Details["category"];match.Landmark="shop";}
             }
         }
 
@@ -187,7 +189,8 @@ namespace GeoSniper
                 // Keep public feature names only; omit private/restricted map features.
                 if (tags["military"] != null) continue;
                 string amenity=((string)tags["amenity"] ?? "").Trim().ToLowerInvariant();
-                bool shop=tags["shop"] != null;
+                string shopType=((string)tags["shop"]??"").Trim().ToLowerInvariant();
+                bool shop=shopType.Length>0 && shopType!="no" && shopType!="vacant";
                 bool landmark=amenity=="fuel" || amenity=="police" || amenity=="hospital" || amenity=="bank";
                 bool isBuilding=landmark || shop || tags["building"] != null || tags["building_part"] != null;
                 bool isWater=(string)tags["natural"] == "water" || tags["waterway"] != null;
@@ -195,6 +198,8 @@ namespace GeoSniper
                 if((string)tags["building"]=="no" && !landmark && !shop) continue;
                 var feature = new MapFeature { Kind = kind, Name = ReadName(tags), Landmark = landmark?amenity:shop?"shop":"", Height = landmark?(amenity=="fuel"?4:8):12 };
                 feature.Details=MapFeatureStyle.ReadDetails(tags["_details"]);
+                if(shopType.Length>0 && shopType.Length<=120)feature.Details["shop"]=shopType;
+                if(shop && shopType.Length<=120)feature.Details["category"]=shopType;
                 // Preserve public OSM material and surface tags for the world renderer.
                 foreach(var mapped in new[]{
                     new[]{"building:levels","num_floors"},new[]{"building:material","facade_material"},new[]{"building:colour","facade_color"},
@@ -208,9 +213,10 @@ namespace GeoSniper
                     string value=(string)tags?[mapped[0]];
                     if(!string.IsNullOrWhiteSpace(value) && value.Length<=40)feature.Details[mapped[1]]=value.Trim();
                 }
-                if(node && string.IsNullOrWhiteSpace(feature.Name) && !landmark) continue;
-                if (float.TryParse((string)tags["height"], NumberStyles.Float, CultureInfo.InvariantCulture, out float height)) feature.Height = Mathf.Clamp(height, 3, MapFeatureStyle.MaxBuildingHeight);
-                else if (float.TryParse((string)tags["building:levels"], NumberStyles.Float, CultureInfo.InvariantCulture, out float levels)) feature.Height = Mathf.Clamp(levels * 3, 3, MapFeatureStyle.MaxBuildingHeight);
+                if(node && string.IsNullOrWhiteSpace(feature.Name) && !landmark && !shop) continue;
+                bool heightKnown=false;
+                if (float.TryParse((string)tags["height"], NumberStyles.Float, CultureInfo.InvariantCulture, out float height)){feature.Height = Mathf.Clamp(height, 3, MapFeatureStyle.MaxBuildingHeight);feature.Details["height_source"]="supplied";heightKnown=true;}
+                else if (float.TryParse((string)tags["building:levels"], NumberStyles.Float, CultureInfo.InvariantCulture, out float levels)){feature.Height = Mathf.Clamp(levels * 3, 3, MapFeatureStyle.MaxBuildingHeight);feature.Details["height_source"]="levels";heightKnown=true;}
                 if(float.IsNaN(feature.Height) || float.IsInfinity(feature.Height)) continue;
                 bool outside = false;
                 if(node)
@@ -230,6 +236,15 @@ namespace GeoSniper
                     feature.Points.Add(p);
                 }
                 if (outside) continue;
+                if(kind=="building" && !landmark && feature.Points.Count>=3 && !heightKnown)
+                {
+                    // OSM fallback shares the footprint-bounded estimate contract. Source IDs
+                    // keep the estimate stable when the GPS query centre changes.
+                    double area=0;for(int i=0;i<feature.Points.Count;i++){var a=feature.Points[i];var b=feature.Points[(i+1)%feature.Points.Count];area+=(double)a.x*b.y-(double)b.x*a.y;}
+                    uint seed=unchecked((uint)((long?)element["id"]??0));seed^=seed>>13;seed*=1274126177;
+                    int floors=Mathf.Clamp(Mathf.FloorToInt(Mathf.Sqrt((float)Math.Abs(area*.5))/7)+(int)(seed%3),2,8);
+                    feature.Height=floors*3;feature.Details["height_source"]="estimated";
+                }
                 if(kind=="place") { result.Add(feature); continue; }
                 if(kind=="road")
                 {
@@ -344,6 +359,66 @@ namespace GeoSniper
             b=a+delta*leave; a+=delta*enter; return (b-a).sqrMagnitude>.01f;
         }
 
+        public static List<MapFeature> Training()
+        {
+            var features=Offline();
+            features.RemoveAll(feature=>feature.Kind=="building" && feature.Points.Exists(p=>Mathf.Abs(p.x)<65 && Mathf.Abs(p.y)<65));
+            // Keep the opening district within the full-interior footprint and height
+            // budget, so its rooftop route has actual stairs and accessible windows.
+            foreach(var building in features)
+                if(building.Kind=="building")
+                {
+                    Vector2 center=Vector2.zero;foreach(var point in building.Points)center+=point;center/=building.Points.Count;
+                    int cellX=Mathf.FloorToInt(center.x/80),cellZ=Mathf.FloorToInt(center.y/80);
+                    int shape=(int)((uint)unchecked(cellX*73856093 ^ cellZ*19349663)%5);
+                    var scale=new Vector2(.62f+shape*.045f,.80f-shape*.032f);
+                    for(int corner=0;corner<building.Points.Count;corner++)building.Points[corner]=center+Vector2.Scale(building.Points[corner]-center,scale);
+                    building.Height=Mathf.Clamp(building.Height,8,24);
+                }
+            // Reuse six southern plots as a designed playable street. Keep the
+            // central teaching arena and the twelve-building interior budget.
+            features.RemoveAll(f=>f.Kind=="building" && SectorSignage.Center(f.Points).y<0);
+            var southernRoad=features.Find(f=>f.Kind=="road" && f.Points[0].x==80 && f.Points[1].x==80);
+            features.Remove(southernRoad);
+            foreach(var span in new[]{new Vector2(-250,-155),new Vector2(-155,-66),new Vector2(-66,250)})
+            {
+                var road=new MapFeature{Kind="road",Name="Foundry Street",Points=new List<Vector2>{new Vector2(80,span.x),new Vector2(80,span.y)}};
+                road.Details["class"]="residential";road.Details["width"]="9";
+                if(span.x==-155)road.Details["study_candidate"]="true";
+                features.Add(road);
+            }
+            string[] names={"FOUNDRY GROCER","","CORNER COFFEE","","NIGHT PHARMACY",""};
+            string[] finishes={"brick","stone","concrete","concrete","brick","stone"};
+            string[] tones={"#8A6D59","#9C9483","#8D9290","#767D81","#66554C","#ACA393"};
+            float[] heights={9,18,12,21,9,15};
+            float[] depths={19,20,18,20,19,20};
+            for(int side=0;side<2;side++)for(int plot=0;plot<3;plot++)
+            {
+                int index=side*3+plot;float z=plot==0?-153:plot==1?-128:-106;
+                float width=20+index%3*3,front=side==0?73-index%2:87+index%2;
+                float x=side==0?front-width:front;
+                var building=new MapFeature{Kind="building",Name=names[index],Height=heights[index],Points=new List<Vector2>{new Vector2(x,z),new Vector2(x+width,z),new Vector2(x+width,z+depths[index]),new Vector2(x,z+depths[index])}};
+                building.Details["training_frontage"]="true";
+                building.Details["facade_material"]=finishes[index];building.Details["facade_color"]=tones[index];
+                building.Details["num_floors"]=(heights[index]/3).ToString(CultureInfo.InvariantCulture);
+                if(names[index].Length>0)building.Details["shop"]=index==2?"cafe":index==4?"chemist":"convenience";
+                features.Add(building);
+            }
+            // A designed skyline frames the fictional starter sector without crowding its teaching arena.
+            // Live GPS maps keep their source buildings; this addition belongs only to offline training.
+            for(int landmark=0;landmark<16;landmark++)
+            {
+                float angle=landmark*Mathf.PI*2/16;
+                var centre=new Vector2(Mathf.Cos(angle),Mathf.Sin(angle))*380;
+                float half=landmark%3==0?17:12,height=landmark%4==0?84:landmark%3==0?56:36;
+                var tower=new MapFeature{Kind="building",Height=height,Points=new List<Vector2>{centre+new Vector2(-half,-half),centre+new Vector2(half,-half),centre+new Vector2(half,half),centre+new Vector2(-half,half)}};
+                tower.Details["num_floors"]=Mathf.RoundToInt(height/3.5f).ToString(CultureInfo.InvariantCulture);
+                tower.Details["facade_material"]=landmark%3==0?"glass":"concrete";
+                tower.Details["scenery_only"]="true";
+                features.Add(tower);
+            }
+            return features;
+        }
         public static List<MapFeature> Offline()
         {
             var features = new List<MapFeature>();

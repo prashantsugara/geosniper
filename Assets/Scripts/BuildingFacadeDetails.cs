@@ -21,6 +21,7 @@ namespace GeoSniper
                 if(length>longest && length>=3.5f){longest=length;selected=i;}
             }
             if(surroundings==null)return selected;
+            bool trainingFront=MapFeatureStyle.Text(building,"training_frontage")=="true" && surroundings.Exists(f=>MapFeatureStyle.Text(f,"study_candidate")=="true");
             int fallback=selected;
             for(int edge=0;edge<building.Points.Count;edge++)
             {
@@ -32,6 +33,7 @@ namespace GeoSniper
                 foreach(var road in surroundings)
                 {
                     if(road.Kind!="road")continue;
+                    if(trainingFront && MapFeatureStyle.Text(road,"study_candidate")!="true")continue;
                     for(int segment=1;segment<road.Points.Count;segment++)
                     {
                         var start=road.Points[segment-1];var delta=road.Points[segment]-start;
@@ -245,7 +247,7 @@ namespace GeoSniper
                 Box(v,t,bulkOrigin,Quaternion.identity,new Vector3(.9f,4.3f,.9f),new Vector3(.65f,.05f,.05f));
 
                 // Rooftop HVAC condenser units and ductwork
-                if(area>60f)
+                if(Mathf.Abs(area)>60f)
                 {
                     Vector3 hvac1=new Vector3(3.5f,0.65f,-0.8f);
                     Box(v,t,bulkOrigin,Quaternion.identity,hvac1,new Vector3(1.8f,1.3f,1.5f));
@@ -254,12 +256,19 @@ namespace GeoSniper
                     Vector3 hvac2=new Vector3(3.5f,0.65f,1.3f);
                     Box(v,t,bulkOrigin,Quaternion.identity,hvac2,new Vector3(1.8f,1.3f,1.5f));
                     Box(v,t,bulkOrigin,Quaternion.identity,hvac2+Vector3.up*.7f,new Vector3(1.1f,.12f,1.1f));
+                    // Grille ribs catch grazing light without extra objects or draw calls.
+                    for(int rib=0;rib<5;rib++)
+                    {
+                        var vent=new Vector3(0,-.42f+rib*.20f,.78f);
+                        Box(v,t,bulkOrigin,Quaternion.identity,hvac1+vent,new Vector3(1.55f,.035f,.065f));
+                        Box(v,t,bulkOrigin,Quaternion.identity,hvac2+vent,new Vector3(1.55f,.035f,.065f));
+                    }
 
                     Box(v,t,bulkOrigin,Quaternion.identity,new Vector3(2.3f,0.45f,0.25f),new Vector3(1.4f,0.6f,0.7f));
                 }
 
                 // Rooftop water storage tank on steel trestle frame
-                if(f.Height>=14f && area>80f)
+                if(f.Height>=14f && Mathf.Abs(area)>80f)
                 {
                     Vector3 tankOrigin=bulkOrigin+new Vector3(-3.8f,0,0);
                     foreach(float sx in new[]{-.85f,.85f})

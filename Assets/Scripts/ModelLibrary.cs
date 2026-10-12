@@ -28,7 +28,7 @@ namespace GeoSniper
             {
                 var selected=new List<GameObject>();
                 var names=category=="Enemies"?new[]{"swat","ch35"}
-                    :new[]{"civilian_modern_men","civilian_tf2c"};
+                    :new[]{"civilian_eric","civilian_carla","civilian_doctor","civilian_modern_men"};
                 foreach(var name in names)
                 {
                     var model=Resources.Load<GameObject>("Models/"+category+"/"+name) ?? Resources.Load<GameObject>("Models/"+name);

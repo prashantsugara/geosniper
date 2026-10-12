@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.unity.services.multiplayer": "2.3.3",
     "com.google.firebase.app": "file:../GooglePackages/com.google.firebase.app-13.17.0.tgz",
     "com.google.firebase.analytics": "file:../GooglePackages/com.google.firebase.analytics-13.17.0.tgz",
     "com.google.ads.mobile": "11.5.0",
@@ -15,6 +16,7 @@
     "com.unity.modules.imageconversion": "1.0.0",
     "com.unity.modules.particlesystem": "1.0.0",
     "com.unity.modules.physics": "1.0.0",
+    "com.unity.modules.screencapture": "1.0.0",
     "com.unity.modules.unitywebrequest": "1.0.0",
     "com.unity.modules.unitywebrequestaudio": "1.0.0"
   },

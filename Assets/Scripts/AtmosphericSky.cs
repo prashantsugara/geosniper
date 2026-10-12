@@ -54,6 +54,7 @@ namespace GeoSniper
             }
 
             if (mainSun == null) FindSunLight();
+            if(skyRenderer!=null && mainSun!=null)skyRenderer.sharedMaterial.SetVector("_SunDirection",-mainSun.transform.forward);
             if (sunDiscTransform != null && mainSun != null)
             {
                 Vector3 sunDir = -mainSun.transform.forward;
@@ -82,6 +83,12 @@ namespace GeoSniper
 
         public void SetWeatherAtmosphere(int weatherCode, bool isDay)
         {
+            if(skyRenderer!=null)
+            {
+                skyRenderer.sharedMaterial.SetFloat("_Night",isDay?0:1);
+                skyRenderer.sharedMaterial.SetFloat("_Storm",weatherCode>=51?1:0);
+                skyRenderer.sharedMaterial.SetFloat("_SkyDetail",MobileGraphics.Selected==MobileGraphicsPreset.Performance?0:1);
+            }
             if (!isDay)
             {
                 // Night atmosphere
@@ -104,10 +111,10 @@ namespace GeoSniper
             {
                 // Crisp daylight
                 zenithColor = new Color(0.09f, 0.24f, 0.44f);
-                midSkyColor = new Color(0.32f, 0.50f, 0.72f);
-                horizonColor = new Color(0.76f, 0.82f, 0.88f);
+                midSkyColor = new Color(0.38f, 0.48f, 0.62f);
+                horizonColor = new Color(0.86f, 0.78f, 0.67f);
                 groundHazeColor = new Color(0.38f, 0.42f, 0.45f);
-                sunGlowColor = new Color(1.0f, 0.95f, 0.82f);
+                sunGlowColor = new Color(1.0f, 0.83f, 0.60f);
             }
             RebuildDomeColors();
             RenderSettings.fogColor = horizonColor;
@@ -186,6 +193,8 @@ namespace GeoSniper
             skyRenderer = gameObject.AddComponent<MeshRenderer>();
             var shader = Shader.Find("GeoSniper/AtmosphericSky") ?? Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color");
             var skyMat = new Material(shader) { name = "AtmosphericSky_Material" };
+            skyMat.SetVector("_SunDirection",new Vector4(.2f,.5f,.8f,0));
+            skyMat.SetFloat("_SkyDetail",1);
             skyMat.renderQueue = 1000; // Background queue
             skyRenderer.sharedMaterial = skyMat;
             skyRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;

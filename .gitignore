@@ -41,11 +41,14 @@ release-secrets.json
 *.aab
 *.tgz
 *.mp4
+*.webm
 issues/
 /Geo Sniper_BurstDebugInformation_DoNotShip/
 /sniper2/
 /sample/
 /inspiration/
 /obj/
+/output/
+/tmp3l0w46p2/
 test_write.ogg
 dev.apk

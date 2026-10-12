@@ -3,7 +3,7 @@ using UnityEngine;
 namespace GeoSniper
 {
     [DefaultExecutionOrder(-100)]
-    public sealed class UrbanPlayer : MonoBehaviour
+    public sealed partial class UrbanPlayer : MonoBehaviour
     {
         public float walkSpeed=5, sprintSpeed=9, jumpSpeed=7.2f;
         Vector3 vaultBoost; float vaultTimer;
@@ -23,7 +23,7 @@ namespace GeoSniper
         public bool Sprinting { get; private set; }
         public bool IsCrouching { get; private set; }
         public bool IsHoldingBreath { get; private set; }
-        public string MovementLabel => climbing ? "CLIMB" : IsCrouching ? "CROUCH" : Sprinting ? "SPRINT" : "WALK";
+        public string MovementLabel => windowVaulting ? "VAULT" : climbing ? "CLIMB" : IsCrouching ? "CROUCH" : Sprinting ? "SPRINT" : "WALK";
         float pitch;
         bool jumpQueued;
         float landingPunch, landingSpeedMultiplier = 1f, prevVertical;
@@ -53,7 +53,7 @@ namespace GeoSniper
             body.stepOffset = .45f; body.slopeLimit = 50f; body.skinWidth = .08f;
             Health = gameObject.GetComponent<CombatActor>();
             if (Health == null) Health = gameObject.AddComponent<CombatActor>();
-            Health.canRegenerate = true;
+            Health.canRegenerate = false;
             // Start on the rooftop traversal platform; the player can descend the generated stair route.
             transform.position = new Vector3(0, 10.1f, -105);
             if (view != null)
@@ -130,6 +130,13 @@ namespace GeoSniper
         float recoilYawVelocity;
         float recoilRollVelocity;
         float cameraBank;
+        float duelHitFlash;
+        public void ShowDuelHitFeedback(float damage)
+        {
+            duelHitFlash = 1f;
+            ApplyRecoil(Mathf.Clamp(damage * .08f, 2f, 7f));
+            AndroidHitHaptics.ConfirmHit();
+        }
 
         public void ApplyRecoil(float magnitude)
         {
@@ -141,6 +148,17 @@ namespace GeoSniper
         void Update()
         {
             SpeedMetersPerSecond = 0;
+            duelHitFlash = Mathf.MoveTowards(duelHitFlash, 0, Time.unscaledDeltaTime * 1.5f);
+            if (Health != null && Health.IsDead && GeoSniper.Duel.SniperDuelManager.ActiveInstance != null && GeoSniper.Duel.SniperDuelManager.ActiveInstance.MatchState != GeoSniper.Duel.DuelMatchState.Idle)
+            {
+                scope = false; BinocularsMode = false;
+                if (view != null)
+                {
+                    view.fieldOfView = Mathf.Lerp(view.fieldOfView, 65, Time.unscaledDeltaTime * 8);
+                    view.transform.localPosition = Vector3.Lerp(view.transform.localPosition, new Vector3(0, .3f, 0), Time.unscaledDeltaTime * 5);
+                    view.transform.localRotation = Quaternion.Slerp(view.transform.localRotation, Quaternion.Euler(12, 0, 65), Time.unscaledDeltaTime * 4);
+                }
+            }
             bool blocked = body == null || (Health != null && Health.IsDead) || BallisticsSystem.isBulletCamActive || InputBlocked || climbing;
             if (blocked) { gyroAim?.Read(false, true); return; }
             nearby=null;
@@ -214,6 +232,7 @@ namespace GeoSniper
             float sensitivity=scope?PlayerPrefs.GetFloat("GeoSniper.ScopeSens",lookSensitivity):lookSensitivity;
             look*=Mathf.Clamp(sensitivity,.3f,2.5f);
             if (gyroAim != null) look += gyroAim.Read(scope, false);
+            if(scope && view!=null)look*=ScopeOptics.AimScale(view.fieldOfView);
             if (PlayerPrefs.GetInt("GeoSniper.InvertAimY",0)==1) look.y=-look.y;
             yaw+=look.x; pitch=Mathf.Clamp(pitch-look.y,-80,80);
             transform.rotation=Quaternion.Euler(0,yaw,0); 
@@ -273,6 +292,9 @@ namespace GeoSniper
                 vertical = -1f;
                 if(Input.GetKeyDown(KeyCode.Space)||(Controls!=null && Controls.JumpPressed)||jumpQueued)
                 {
+                    Vector3 vaultDirection=(transform.right*input.x+transform.forward*input.y).normalized;
+                    if(vaultDirection.sqrMagnitude<.01f)vaultDirection=transform.forward;
+                    if(TryWindowVault(vaultDirection)){jumpQueued=false;return;}
                     vertical = jumpSpeed;
                     groundedTimer = 0f;
                     if(IsCrouching)
@@ -344,6 +366,7 @@ namespace GeoSniper
             if (Physics.Raycast(transform.position + Vector3.up * 0.4f, Vector3.down, out var hit, 1.2f, ~0, QueryTriggerInteraction.Ignore))
             {
                 string colName = hit.collider.gameObject.name;
+                if(hit.collider.GetComponentInParent<EnterableBuilding>()!=null)surface="Concrete";
                 if (colName.Contains("Mud")) { surface = "Mud"; isDusty = true; }
                 else if (colName.Contains("Gravel")) { surface = "Gravel"; isDusty = true; }
                 else if (colName.Contains("Cobblestone")) { surface = "Cobblestone"; }
@@ -358,7 +381,8 @@ namespace GeoSniper
                 if (clip != null)
                 {
                     footstepAudio.pitch = UnityEngine.Random.Range(0.93f, 1.07f);
-                    float vol = Sprinting ? 0.82f : (IsCrouching ? 0.32f : 0.58f);
+                    bool indoors=false;foreach(var building in EnterableBuilding.All)if(building.Contains(transform.position)){indoors=true;break;}
+                    float vol = (Sprinting ? .82f : IsCrouching ? .32f : .58f)*(indoors?.85f:1f);
                     footstepAudio.PlayOneShot(clip, vol);
                 }
             }
@@ -392,6 +416,18 @@ namespace GeoSniper
         public void Jump(){ jumpQueued=true; }
         void OnGUI()
         {
+            if (GeoSniper.Duel.SniperDuelManager.ActiveInstance != null && GeoSniper.Duel.SniperDuelManager.ActiveInstance.MatchState != GeoSniper.Duel.DuelMatchState.Idle && Health != null && (duelHitFlash > 0 || Health.IsDead))
+            {
+                int feedbackDepth = GUI.depth;
+                GUI.depth = -290;
+                Color feedbackColor = GUI.color;
+                GUI.color = new Color(.65f, .015f, .015f, Health.IsDead ? .28f : duelHitFlash * .22f);
+                GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+                GUI.color = Color.white;
+                GUI.Label(new Rect(Screen.width * .5f - 160, Screen.height * .6f, 320, 40), Health.IsDead ? "ELIMINATED // WAIT FOR NEXT ROUND" : "HIT!", GUIStyleCache.Get(18, FontStyle.Bold, TextAnchor.MiddleCenter, Color.red));
+                GUI.color = feedbackColor;
+                GUI.depth = feedbackDepth;
+            }
             if(InputBlocked || climbing || nearby==null) return;
             var previous=GUI.matrix; GUI.matrix=Matrix4x4.identity;
             bool mobile=Application.isMobilePlatform || Input.touchSupported;
@@ -440,14 +476,17 @@ namespace GeoSniper
             vertical=0; 
             if (body != null) body.enabled=true;
         }
-        public void Face(Vector3 point)
+        public void Face(Vector3 point,bool aimHeight=false)
         {
+            duelHitFlash = 0; scope = false; BinocularsMode = false;
+            if (view != null) view.transform.localPosition = new Vector3(0, 1.55f, 0);
             var direction=point-transform.position;direction.y=0;
             if(direction.sqrMagnitude<.01f) return;
-            yaw=Quaternion.LookRotation(direction).eulerAngles.y;pitch=0;
+            yaw=Quaternion.LookRotation(direction).eulerAngles.y;pitch=aimHeight?-Mathf.Atan2(point.y-(transform.position.y+1.55f),direction.magnitude)*Mathf.Rad2Deg:0;
             transform.rotation=Quaternion.Euler(0,yaw,0);
-            if(view!=null) view.transform.localRotation=Quaternion.identity;
+            if(view!=null) view.transform.localRotation=Quaternion.Euler(pitch,0,0);
         }
+        public void ExitAim(){scope=false;BinocularsMode=false;touchSprint=false;if(view!=null)view.fieldOfView=65;}
         public void ToggleScope(){ scope=!scope; }
         public void ToggleSprint(){ touchSprint=!touchSprint; }
         public bool Scoped=>scope;

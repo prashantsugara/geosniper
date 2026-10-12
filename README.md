@@ -6,7 +6,7 @@ The lobby uses a charcoal/amber command-room layout: navigation on the left,
 an inspectable 3D operator in the centre, and mission selection/deployment on the
 right. Drag only inside the operator showcase to rotate it. MODIFY opens the
 armory; DIFFICULTY opens settings. Offline Ops is the existing generated-sector
-practice mode; Sniper Duel is against an AI rival, not online matchmaking.
+practice mode; Sniper Duel offers an AI rival and direct LAN 1v1 rooms. Both players must use the same build (duel protocol v6). The host chooses live GPS or a searched location; its map and terrain are shared with the guest before host-assigned perches and round readiness. Internet matchmaking/Relay is not configured; see [DUEL_MULTIPLAYER.md](DUEL_MULTIPLAYER.md).
 The home layout scales within the device safe area. In Unity's Game view, use
 Fit/1x scale to see the complete frame instead of a zoomed crop.
 
@@ -27,6 +27,16 @@ The campaign now progresses from untimed two-target training to expert contracts
 across 14 authored nodes. Casual / Standard / Hardcore is applied alongside each
 node's tier. See [CAMPAIGN_PROGRESSION.md](CAMPAIGN_PROGRESSION.md) for the level
 order, balancing rules, fixes, and remaining playtesting work.
+
+Campaign guards investigate concealed gunfire, react to nearby bullet flights and
+impacts, and search the last observed area after losing sight. They take time to
+settle their aim, interrupt bursts when hit or suppressed, and use short lateral
+steps with one covering teammate and one flanker. Enemy damage follows physical
+bullet rays, so cover and late movement can avoid shots. Hit and fire reactions
+blend over walking animation. Validate these behaviors and the actual enemy rigs
+with `Tools/run_duel_visual_checks.ps1 -ExecuteMethod CampaignEnemyReactionChecks.RunAll`;
+reports are saved in `.utmp/duel-unity/Logs/`. Android gameplay balance still needs
+device playtesting after rebuilding the APK.
 
 Open Assets/Scenes/GeoSniper.unity and enter Play mode. Choose a place by name,
 use My Location on a phone, or start Offline Practice. Gameplay uses 640 m square

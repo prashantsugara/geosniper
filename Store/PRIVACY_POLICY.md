@@ -1,6 +1,6 @@
 # Geo Sniper Privacy Policy
 
-Effective date: 20 September 2026
+Effective date: 5 October 2026
 
 Geo Sniper is a tactical game. This policy explains what information the game may process and the choices available to you.
 
@@ -17,6 +17,10 @@ When you use map search or map-based gameplay, the selected area, coordinates or
 The current game integration may use Overture map data, OpenStreetMap/Overpass services, Photon place search and map or elevation tile services where enabled. These independent services have their own privacy policies and terms.
 
 Maps are a fundamental part of the gameplay. Map tile data is cached on your device to reduce data usage and improve load times. No background location is ever requested.
+
+## Online multiplayer
+
+Online duels use Unity Authentication to create an anonymous player identifier and Unity Relay to connect players. Unity receives connection information, including IP addresses, and relays duel messages between players. Messages include callsigns, selected weapons, gameplay state and the host's chosen map area and coordinates. Choosing your live location as the duel map shares that location with your opponent. You can choose another map area instead. Unity Relay connections use DTLS encryption. These services are subject to the [Unity Privacy Policy](https://unity.com/legal/privacy-policy).
 
 ## Analytics
 

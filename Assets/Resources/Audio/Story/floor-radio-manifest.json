@@ -1,0 +1,62 @@
+[
+  {
+    "id": 0,
+    "part": "FloorRadio",
+    "file": "Radio_Floor0.wav",
+    "textHash": "7c91f40ae69856123f14ae7611c4a84dd819cfe739a4b63781843c77ca8f7e99",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook, Command here. Your objective is on the ground floor. Guards cover the other floors. Use the stairs. Stay sharp.",
+    "seconds": 7.88
+  },
+  {
+    "id": 1,
+    "part": "FloorRadio",
+    "file": "Radio_Floor1.wav",
+    "textHash": "b0accbf667bfd1a578e9dc5c16b7a2bca26d00708f5538d7ee4c388aa389f316",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook, Command here. Your objective is on floor 2. Guards cover the other floors. Use the stairs. Stay sharp.",
+    "seconds": 7.52
+  },
+  {
+    "id": 2,
+    "part": "FloorRadio",
+    "file": "Radio_Floor2.wav",
+    "textHash": "9030387103e0bbe4f0e189fe063e1276f7f7234657fad5b2ec204192b9a981a7",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook, Command here. Your objective is on floor 3. Guards cover the other floors. Use the stairs. Stay sharp.",
+    "seconds": 7.56
+  },
+  {
+    "id": 3,
+    "part": "FloorRadio",
+    "file": "Radio_Floor3.wav",
+    "textHash": "63ce779eec9186bd4d27b8e7a3b042b084a9aa3c9f4001a12b5be7ddc813af41",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook, Command here. Your objective is on floor 4. Guards cover the other floors. Use the stairs. Stay sharp.",
+    "seconds": 7.6
+  },
+  {
+    "id": 4,
+    "part": "FloorRadio",
+    "file": "Radio_Floor4.wav",
+    "textHash": "647e0fbfedef7982628719438db224944cf8891d4d59a4973ce3166d555a508b",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook, Command here. Your objective is on floor 5. Guards cover the other floors. Use the stairs. Stay sharp.",
+    "seconds": 7.62
+  },
+  {
+    "id": 5,
+    "part": "FloorRadio",
+    "file": "Radio_Floor5.wav",
+    "textHash": "d595a3b6867a346a6193cc476d7c8c2e6e6149e79ec867fc2141fc1c32221e3c",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook, Command here. Your objective is on floor 6. Guards cover the other floors. Use the stairs. Stay sharp.",
+    "seconds": 7.56
+  }
+]

@@ -1,6 +1,6 @@
 # GeoSniper: Game Modes, Mission Architecture & Difficulty Tuning Guide
 
-Current campaign implementation (2026-09-19): see [CAMPAIGN_PROGRESSION.md](CAMPAIGN_PROGRESSION.md). There are 14 authored nodes, explicit contract types, per-node threat budgets and tier-based modifiers composed with `DifficultyProfile`. That document supersedes the older tuning examples and line numbers below; do not tune the current game by changing those historical hardcoded values. The opening mission is now untimed two-target training, and all sniper duels are against AI, not online players.
+Current campaign implementation (2026-09-19): see [CAMPAIGN_PROGRESSION.md](CAMPAIGN_PROGRESSION.md). There are 14 authored nodes, explicit contract types, per-node threat budgets and tier-based modifiers composed with `DifficultyProfile`. That document supersedes the older tuning examples and line numbers below; do not tune the current game by changing those historical hardcoded values. The opening mission is now untimed two-target training, and campaign sniper duels are against AI. Standalone Sniper Duel also offers direct LAN 1v1; see [DUEL_MULTIPLAYER.md](DUEL_MULTIPLAYER.md) for its implementation and verification limits.
 
 The remainder of this document is an earlier technical/design reference for **GeoSniper**. Some sections describe prototype behavior or planned content rather than the current implementation.
 

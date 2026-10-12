@@ -106,15 +106,24 @@ def normalize(raw, lat, lon):
                 owner = [sum(p[i] for p in points[:-1]) / (len(points)-1) for i in (0, 1)]
                 if any(v < -320 or v >= 320 for v in owner):
                     continue
-                try:
-                    height = float(tags.get("height", float(tags.get("building:levels", 4))*3))
-                except (ValueError, TypeError):
-                    height = 12
-                if not math.isfinite(height):
-                    height = 12
+                height, height_source = None, "estimated"
+                for key, multiplier, source in (("height", 1, "provided"), ("building:levels", 3, "floors")):
+                    try:
+                        candidate = float(tags[key])*multiplier
+                        if math.isfinite(candidate) and candidate > 0:
+                            height, height_source = candidate, source
+                            break
+                    except (ValueError, TypeError, KeyError):
+                        pass
+                if height is None:
+                    area = abs(sum(a[0]*b[1]-b[0]*a[1] for a, b in zip(points, points[1:]))) / 2
+                    seed = int(hashlib.sha256(json.dumps(geometry, sort_keys=True).encode()).hexdigest()[:8], 16)
+                    max_floors = 2 if area < 70 else 4 if area < 250 else 8
+                    height = (2 + seed % max(1, max_floors-1))*3 if kind == "building" else 12
                 item = dict(kind=kind, name=feature_name(tags),
                             landmark=amenity if is_landmark else "shop" if is_shop else "",
-                            height=max(3, min(60, height)),
+                            height=max(3, min(220, height)),
+                            details={"height_source": height_source},
                             points=[[round(v, 2) for v in p] for p in points[:-1]])
                 (buildings if kind == "building" else other).append(item)
         except (ValueError, TypeError, KeyError, AttributeError):

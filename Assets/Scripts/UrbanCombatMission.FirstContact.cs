@@ -207,7 +207,7 @@ namespace GeoSniper
             currentMissionState=firstContact.Phase==ContractPhase.Extracting?MissionState.Extraction:
                 firstContact.Phase==ContractPhase.Complete?MissionState.Complete:
                 firstContact.Phase==ContractPhase.Failed?MissionState.Failed:MissionState.InProgress;
-            if(currentMissionState==MissionState.Complete) {hasWaypointPin=false;RewardStage();}
+            if(currentMissionState==MissionState.Complete) {player?.ExitAim();hasWaypointPin=false;RewardStage();}
         }
         void ShowContractExtraction()
         {
@@ -243,7 +243,7 @@ namespace GeoSniper
         {
             if(firstContact==null) return;
             var body=new GUIStyle(GUI.skin.label){fontSize=17,wordWrap=true,alignment=TextAnchor.MiddleCenter};
-            var button=new GUIStyle(GUI.skin.button){fontSize=16};
+            var button=GameButtonChrome.Style(GameButtonTone.Cyan,16);
             if(firstContact.Phase==ContractPhase.Briefing || firstContact.Phase==ContractPhase.Complete || firstContact.Phase==ContractPhase.Failed)
             {
                 float w=Mathf.Min(560,width-40),h=Mathf.Min(340,height-40);
@@ -272,11 +272,14 @@ namespace GeoSniper
                 return;
             }
             var statusStyle=new GUIStyle(GUI.skin.box){fontSize=13,alignment=TextAnchor.MiddleLeft};
-            GUI.Box(new Rect(15,122,260,32),firstContact.Scouted?"SCOUTED  |  Choose your shot":"OPTIONAL: SCOUT A MARKED POSITION",statusStyle);
+            Rect safe=CombatHudPreferences.SafeCanvas(width,height);
+            float columnX=CombatHudPreferences.UtilityDock(safe).xMax+20;
+            float columnY=safe.y+170;
+            GUI.Box(new Rect(columnX,columnY,260,32),firstContact.Scouted?"SCOUTED · Choose your shot":"OPTIONAL: SCOUT A MARKED POSITION",statusStyle);
             for(int i=0;i<contractVantages.Count && !firstContact.TargetDown;i++)
-                if(GUI.Button(new Rect(15,160+i*46,260,42),"POSITION "+(char)('A'+i)+" - "+contractVantageNames[i],button))
+                if(GUI.Button(new Rect(columnX,columnY+38+i*46,260,42),"POSITION "+(char)('A'+i)+" - "+contractVantageNames[i],button))
                 {SetWaypoint(contractVantages[i],"Position "+(char)('A'+i));}
-            if(firstContact.TargetDown) GUI.Box(new Rect(15,160,260,50),"EXTRACTION\nHold "+firstContact.ExtractionHold.ToString("0.0")+" / 2.0 seconds",statusStyle);
+            if(firstContact.TargetDown) GUI.Box(new Rect(columnX,columnY+38,260,50),"EXTRACTION\nHold "+firstContact.ExtractionHold.ToString("0.0")+" / 2.0 seconds",statusStyle);
         }
         void LeaveFirstContact()
         {

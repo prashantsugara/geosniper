@@ -22,6 +22,8 @@ namespace GeoSniper
                 return;
             }
 
+            if(currentTab==LobbyTab.Location && !loading && !showingModeSelector){DrawLocationPicker(w,h);return;}
+
             // ── TOP HEADER BAR (54px) ─────────────────────────────────────
             float headerH = 54f;
             LobbyFill(new Rect(0, 0, w, headerH), CommandGUI.ThemeCard);
@@ -40,24 +42,16 @@ namespace GeoSniper
             // Header Right: Balance + Settings + Close (properly spaced, zero collision)
             int credits = PlayerPrefs.GetInt("GeoSniper.Credits", 0);
             Rect credRect = new Rect(w - 290, 10, 135, 34);
-            LobbyFill(credRect, new Color(0.04f, 0.08f, 0.04f, 0.90f));
-            LobbyFill(new Rect(credRect.x, credRect.y, 2, credRect.height), CommandGUI.AccentGold);
-            LobbyLabel(credRect, "  $" + credits.ToString("N0") + " Cr", 11, CommandGUI.AccentGold, true, TextAnchor.MiddleCenter);
-            if (GUI.Button(credRect, GUIContent.none, GUIStyle.none)) SwitchTab(LobbyTab.Rewards);
+            if (GameButtonChrome.Draw(credRect,"$"+credits.ToString("N0")+" CR",GameButtonTone.Steel,11)) SwitchTab(LobbyTab.Rewards);
 
             // Settings gear
             Rect settRect = new Rect(w - 145, 10, 48, 34);
-            LobbyFill(settRect, CommandGUI.ThemeCard);
-            LobbyFill(new Rect(settRect.x, settRect.yMax - 1, settRect.width, 1), CommandGUI.ThemeBorder);
-            LobbyLabel(settRect, "⚙", 15, currentTab == LobbyTab.Settings ? CommandGUI.AccentGold : CommandGUI.Muted, false, TextAnchor.MiddleCenter);
-            if (GUI.Button(settRect, GUIContent.none, GUIStyle.none)) SwitchTab(LobbyTab.Settings);
+            if (GameButtonChrome.Draw(settRect,"⚙",currentTab==LobbyTab.Settings?GameButtonTone.Cyan:GameButtonTone.Steel,15)) SwitchTab(LobbyTab.Settings);
 
             // Back-to-home button
             Rect closeRect = new Rect(w - 85, 10, 70, 34);
-            LobbyFill(closeRect, new Color(0.12f, 0.04f, 0.04f, 0.90f));
-            LobbyFill(new Rect(closeRect.x, closeRect.yMax - 1, closeRect.width, 1), CommandGUI.AccentRed);
-            LobbyLabel(closeRect, "✕ LOBBY", 10, Color.white, true, TextAnchor.MiddleCenter);
-            if (GUI.Button(closeRect, GUIContent.none, GUIStyle.none)) SwitchTab(LobbyTab.Home);
+            if (GameButtonChrome.Draw(closeRect,currentTab==LobbyTab.Armory && returnToCampaignFromArmory?"MISSION":"✕ LOBBY",GameButtonTone.Steel,10))
+            {if(currentTab==LobbyTab.Armory && returnToCampaignFromArmory){returnToCampaignFromArmory=false;SwitchTab(LobbyTab.Campaign);}else SwitchTab(LobbyTab.Home);}
 
             // ── CONTENT AREA (between header and bottom nav) ──────────────
             float navH = 62f;
@@ -68,7 +62,7 @@ namespace GeoSniper
 
             GUI.BeginGroup(content);
             bool previousEnabled = GUI.enabled;
-            GUI.enabled = !loading;
+            GUI.enabled = previousEnabled && !loading;
             try
             {
                 if (loading) DrawLoadingScreen(content.width, content.height);
@@ -89,13 +83,11 @@ namespace GeoSniper
             }
 
             // ── BOTTOM NAV BAR ────────────────────────────────────────────
-            int activeTab = loading ? -1 : (int)currentTab;
-            string[] navIcons  = { "▲", "≡", "†", "◉", "★" };
-            string[] navLabels = { "OVERVIEW", "CAMPAIGN", "ARMORY", "SECTOR", "REWARDS" };
-            GUI.enabled = !loading;
-            int navClicked = CommandGUI.DrawNavBar(new Rect(0, h - navH, w, navH), navIcons, navLabels, activeTab);
-            GUI.enabled = true;
-            if (navClicked >= 0) SwitchTab((LobbyTab)navClicked);
+            int activeTab = loading ? -1 : System.Array.IndexOf(LobbyFooterTabs, currentTab);
+            GUI.enabled = previousEnabled && !loading;
+            int navClicked = CommandGUI.DrawNavBar(new Rect(0, h - navH, w, navH), LobbyFooterIcons, LobbyFooterLabels, activeTab);
+            GUI.enabled = previousEnabled;
+            if (navClicked >= 0 && navClicked < LobbyFooterTabs.Length) SwitchTab(LobbyFooterTabs[navClicked]);
         }
     }
 }

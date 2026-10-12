@@ -20,16 +20,27 @@ namespace GeoSniper
         public static event Action<EnemyBot> OnEnemyKilled;
         public static event Action<CivilianBot> OnCivilianKilled;
 
-        public static DamageInfo ProcessHit(Collider hitCollider, float baseDamage, Vector3 hitPoint, float headMultiplier=2f, float limbMultiplier=.6f)
+        public static DamageInfo ProcessHit(Collider hitCollider, float baseDamage, Vector3 hitPoint, float headMultiplier=2f, float limbMultiplier=.6f, Vector3? sourcePosition=null, bool lethalHeadshots=true)
         {
             if (hitCollider == null) return default;
 
             // 1. Check for explosive environmental props (cars, fuel tanks, barrels)
             var explosive = hitCollider.GetComponentInParent<ExplosiveProp>();
-            if (explosive != null && !explosive.isDetonated)
+            if (explosive != null && !explosive.isDetonated && !(GeoSniper.Duel.SniperDuelManager.ActiveInstance?.UsesDuelLoadout ?? false))
             {
                 explosive.TakeDamage(baseDamage, hitPoint);
                 return new DamageInfo { baseDamage = baseDamage, multiplier = 1f, hitPoint = hitPoint, bodyPart = "prop", isHeadshot = false };
+            }
+
+            var rival = hitCollider.GetComponentInParent<GeoSniper.Duel.DuelOpponentAvatar>();
+            if (rival != null)
+            {
+                if (rival.IsDead) return default;
+                bool head = hitCollider.gameObject.name == "Hitbox_Head";
+                var info = new DamageInfo {baseDamage = head ? 100f : baseDamage, multiplier = 1f,
+                    hitPoint = hitPoint, bodyPart = head ? "head" : "torso", isHeadshot = head};
+                // Hit effects are predicted; damage and confirmation arrive from the host.
+                return info;
             }
 
             // 2. Check for Enemy Bots
@@ -39,6 +50,7 @@ namespace GeoSniper
                 var actor = bot.GetComponent<CombatActor>();
                 if (actor != null && !actor.IsDead)
                 {
+                    lethalHeadshots &= actor.AllowExecutionHeadshots;
                     var hitboxes = bot.GetComponentInChildren<EnemyHitboxes>();
                     string bodyPart = "body";
                     float multiplier = 1f;
@@ -47,14 +59,14 @@ namespace GeoSniper
                     if (hitboxes != null)
                     {
                         bodyPart = hitboxes.GetBodyPart(hitCollider, hitPoint);
-                        if (bodyPart == "head") multiplier = Mathf.Max(headMultiplier, 4.0f);
+                        if (bodyPart == "head") multiplier = lethalHeadshots?Mathf.Max(headMultiplier,4f):headMultiplier;
                         else if (bodyPart.Contains("arm") || bodyPart.Contains("leg") || bodyPart.Contains("foot") || bodyPart.Contains("hand")) multiplier = effectiveLimbMult;
                         else multiplier = 1f;
                     }
                     else
                     {
                         Vector3 local = bot.transform.InverseTransformPoint(hitPoint);
-                        if (local.y >= 1.45f) { bodyPart = "head"; multiplier = Mathf.Max(headMultiplier, 4.0f); }
+                        if (local.y >= 1.45f) { bodyPart = "head"; multiplier = lethalHeadshots?Mathf.Max(headMultiplier,4f):headMultiplier; }
                         else if (local.y < 0.85f) { bodyPart = (local.x < 0) ? "leftleg" : "rightleg"; multiplier = effectiveLimbMult; }
                         else if (Mathf.Abs(local.x) > 0.20f) { bodyPart = (local.x < 0) ? "leftarm" : "rightarm"; multiplier = effectiveLimbMult; }
                         else { bodyPart = "torso"; multiplier = 1f; }
@@ -62,7 +74,7 @@ namespace GeoSniper
 
                     bool isHeadshot = bodyPart == "head";
                     float totalDmg = baseDamage * multiplier;
-                    if (isHeadshot)
+                    if (isHeadshot && lethalHeadshots)
                     {
                         // Sniper rifle headshots are always lethal executions (1-shot instant kill)
                         totalDmg = Mathf.Max(totalDmg, actor.Health + 100f);
@@ -77,17 +89,11 @@ namespace GeoSniper
                         isHeadshot = isHeadshot
                     };
 
+                    actor.Damage(totalDmg, sourcePosition ?? Vector3.zero);
                     bot.RegisterAnatomicalHit(info);
-                    actor.Damage(totalDmg, hitPoint);
                     OnDamageDealt?.Invoke(info);
 
-                    // Audio Feedback
-                    AudioSource speaker = Camera.main != null ? Camera.main.GetComponent<AudioSource>() : null;
-                    if (speaker != null)
-                    {
-                        AudioClip clip = info.isHeadshot ? ProceduralAudio.CreateHeadshotPing() : ProceduralAudio.CreateBodyHitThud();
-                        speaker.PlayOneShot(clip, info.isHeadshot ? 1.0f : 0.6f);
-                    }
+                    CombatImpactAudio.Play(info.isHeadshot);
 
                     return info;
                 }
@@ -106,6 +112,14 @@ namespace GeoSniper
             }
 
             return default;
+        }
+
+        public static void ConfirmDuelHit(byte zone, float damage, Vector3 point)
+        {
+            if (zone > 2 || !float.IsFinite(damage) || damage <= 0) return;
+            CombatImpactAudio.Play(zone==2);
+            OnDamageDealt?.Invoke(new DamageInfo {baseDamage=damage, multiplier=1, hitPoint=point,
+                bodyPart=zone==2 ? "head" : zone==0 ? "limb" : "torso", isHeadshot=zone==2});
         }
 
         public static void NotifyKill(EnemyBot bot)

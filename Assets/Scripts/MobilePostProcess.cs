@@ -7,6 +7,10 @@ namespace GeoSniper
     [DisallowMultipleComponent]
     public sealed class MobilePostProcess : MonoBehaviour
     {
+        static readonly int ColorGradingId = Shader.PropertyToID("_ColorGrading");
+        static readonly int ScopeParamsId = Shader.PropertyToID("_ScopeParams");
+        static readonly int BloomParamsId = Shader.PropertyToID("_BloomParams");
+        static readonly int BloomTextureId = Shader.PropertyToID("_BloomTex");
         public static MobilePostProcess Instance { get; private set; }
 
         [Header("Bloom")]
@@ -27,6 +31,16 @@ namespace GeoSniper
 
         Material postMaterial;
         Camera targetCam;
+
+        public void ApplyEnvironment(bool night, bool rain)
+        {
+            // Bloom should lift emissive lights, rather than flatten sunlit concrete.
+            bloomThreshold = night ? .82f : 1.15f;
+            bloomIntensity = night ? 1.15f : rain ? .16f : .22f;
+            exposure = night ? 1.04f : .96f;
+            contrast = 1.08f;
+            saturation = night ? 1.03f : .98f;
+        }
 
         public static MobilePostProcess Ensure(Camera cam)
         {
@@ -83,12 +97,15 @@ namespace GeoSniper
             int blurIterations = preset == MobileGraphicsPreset.High ? 2 : 1;
 
             float aspect = (float)src.width / Mathf.Max(1, src.height);
-            postMaterial.SetVector("_ColorGrading", new Vector4(contrast, saturation, exposure, vignetteIntensity));
-            postMaterial.SetVector("_ScopeParams", new Vector4(scopeBlend, scopeRadius, aspect, 0.06f));
+            postMaterial.SetVector(ColorGradingId, new Vector4(contrast, saturation, exposure, vignetteIntensity));
+            postMaterial.SetVector(ScopeParamsId, new Vector4(scopeBlend, scopeRadius, aspect, 0.06f));
 
             if (!enableBloom || bloomIntensity <= 0.01f)
             {
-                postMaterial.SetVector("_BloomParams", new Vector4(bloomThreshold, bloomSoftKnee, 0f, 0f));
+                // Never sample a temporary texture released by the last frame
+                // when switching to Performance or turning bloom off.
+                postMaterial.SetTexture(BloomTextureId, Texture2D.blackTexture);
+                postMaterial.SetVector(BloomParamsId, new Vector4(bloomThreshold, bloomSoftKnee, 0f, 0f));
                 Graphics.Blit(src, dest, postMaterial, 2);
                 return;
             }
@@ -96,28 +113,36 @@ namespace GeoSniper
             // Downsampled bloom buffer (1/4 screen resolution)
             int bw = Mathf.Max(64, src.width / 4);
             int bh = Mathf.Max(64, src.height / 4);
-            RenderTexture rt1 = RenderTexture.GetTemporary(bw, bh, 0, src.format);
-            RenderTexture rt2 = RenderTexture.GetTemporary(bw, bh, 0, src.format);
-
-            postMaterial.SetVector("_BloomParams", new Vector4(bloomThreshold, bloomSoftKnee, bloomIntensity, bloomSpread));
-
-            // Pass 0: Threshold extract
-            Graphics.Blit(src, rt1, postMaterial, 0);
-
-            // Pass 1: Kawase blur
-            for (int i = 0; i < blurIterations; i++)
+            RenderTexture rt1 = null, rt2 = null;
+            try
             {
-                postMaterial.SetVector("_BloomParams", new Vector4(bloomThreshold, bloomSoftKnee, bloomIntensity, bloomSpread * (1f + i * 0.75f)));
-                Graphics.Blit(rt1, rt2, postMaterial, 1);
-                var temp = rt1; rt1 = rt2; rt2 = temp;
+                rt1 = RenderTexture.GetTemporary(bw, bh, 0, src.format);
+                rt2 = RenderTexture.GetTemporary(bw, bh, 0, src.format);
+                rt1.filterMode = rt2.filterMode = FilterMode.Bilinear;
+                rt1.wrapMode = rt2.wrapMode = TextureWrapMode.Clamp;
+                postMaterial.SetVector(BloomParamsId, new Vector4(bloomThreshold, bloomSoftKnee, bloomIntensity, bloomSpread));
+
+                // Pass 0: Threshold extract
+                Graphics.Blit(src, rt1, postMaterial, 0);
+
+                // Pass 1: Kawase blur
+                for (int i = 0; i < blurIterations; i++)
+                {
+                    postMaterial.SetVector(BloomParamsId, new Vector4(bloomThreshold, bloomSoftKnee, bloomIntensity, bloomSpread * (1f + i * 0.75f)));
+                    Graphics.Blit(rt1, rt2, postMaterial, 1);
+                    var temp = rt1; rt1 = rt2; rt2 = temp;
+                }
+
+                // Pass 2: Final composite
+                postMaterial.SetTexture(BloomTextureId, rt1);
+                Graphics.Blit(src, dest, postMaterial, 2);
             }
-
-            // Pass 2: Final composite
-            postMaterial.SetTexture("_BloomTex", rt1);
-            Graphics.Blit(src, dest, postMaterial, 2);
-
-            RenderTexture.ReleaseTemporary(rt1);
-            RenderTexture.ReleaseTemporary(rt2);
+            finally
+            {
+                postMaterial.SetTexture(BloomTextureId, Texture2D.blackTexture);
+                if (rt1 != null) RenderTexture.ReleaseTemporary(rt1);
+                if (rt2 != null) RenderTexture.ReleaseTemporary(rt2);
+            }
         }
     }
 }

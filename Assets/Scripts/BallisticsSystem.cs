@@ -13,6 +13,17 @@ namespace GeoSniper
         
         public BallisticsConfig config;
         private List<EnemyBot> enemies;
+        private List<EnemyBot> auxiliaryTargets;
+        readonly List<EnemyBot> combinedTargets=new List<EnemyBot>();
+        List<EnemyBot> ShotTargets
+        {
+            get
+            {
+                if(auxiliaryTargets==null || auxiliaryTargets.Count==0)return enemies;
+                combinedTargets.Clear();if(enemies!=null)combinedTargets.AddRange(enemies);combinedTargets.AddRange(auxiliaryTargets);return combinedTargets;
+            }
+        }
+        public void SetAuxiliaryTargets(List<EnemyBot> targets){auxiliaryTargets=targets;}
         private Transform player;
         private Camera cameraView;
         private SniperPresentation weapon;
@@ -39,7 +50,12 @@ namespace GeoSniper
             Ray ray = new Ray(cameraView.transform.position,cameraView.transform.forward);
             Vector3 muzzle = cameraView.transform.position + cameraView.transform.forward * 1.5f + cameraView.transform.right * 0.15f - cameraView.transform.up * 0.1f;
 
-            if (config.isArcadeMode)
+            var duel = GeoSniper.Duel.SniperDuelManager.ActiveInstance;
+            bool multiplayer = duel != null && duel.UsesDuelLoadout;
+            if (multiplayer && !duel.CanPlay) return;
+
+            // Duel damage uses the same host-resolved hitscan model on both devices.
+            if (config.isArcadeMode || multiplayer)
             {
                 FireArcade(ray, muzzle);
             }
@@ -48,6 +64,7 @@ namespace GeoSniper
                 StartCoroutine(SimulateProjectile(ray, muzzle));
             }
             
+            duel?.NotifyLocalGunshot(ray.origin, ray.direction, weapon != null ? weapon.CurrentWeaponIndex : 1);
             OnGunshot?.Invoke(muzzle);
             float noise = UrbanCombatMission.IsSoundMasked ? 0f : config.noiseRadius;
             OnShotNoise?.Invoke(muzzle, noise);
@@ -55,7 +72,7 @@ namespace GeoSniper
 
         private void FireArcade(Ray ray, Vector3 muzzle)
         {
-            bool hasHit = SniperHitQuery.TryCastAimAssist(ray, enemies, player, cameraView.transform, out var hit, config.maxRange);
+            bool hasHit = SniperHitQuery.TryCastAimAssist(ray, ShotTargets, player, cameraView.transform, out var hit, config.maxRange);
             var hitCollider = hit.Collider;
             Vector3 impactPoint = ray.origin + ray.direction * config.maxRange;
             bool hitEnemy = false;
@@ -70,13 +87,13 @@ namespace GeoSniper
                     SpawnGlassShardsFX(hit.Point, ray.direction);
                     remaining -= hit.Distance + Vector3.Distance(hit.Point,exit);
                     damage *= .65f;
-                    if (!SniperHitQuery.TryCast(new Ray(exit,ray.direction), enemies, player, cameraView.transform, out var next, remaining))
+                    if (!SniperHitQuery.TryCast(new Ray(exit,ray.direction), ShotTargets, player, cameraView.transform, out var next, remaining))
                     { hitCollider=null; impactPoint=exit+ray.direction*Mathf.Max(0,remaining); break; }
                     hit=next; hitCollider=hit.Collider; impactPoint=hit.Point;
                 }
-                var info = DamageSystem.ProcessHit(hitCollider, damage, impactPoint, config.headshotMultiplier, config.limbMultiplier);
+                var info = DamageSystem.ProcessHit(hitCollider, damage, impactPoint, config.headshotMultiplier, config.limbMultiplier, ray.origin, config.lethalHeadshots);
                 var bot = hitCollider != null ? hitCollider.GetComponentInParent<EnemyBot>() : null;
-                hitEnemy = bot != null;
+                hitEnemy = bot != null || (hitCollider != null && hitCollider.GetComponentInParent<GeoSniper.Duel.DuelOpponentAvatar>() != null);
 
                 if (hitEnemy && ShouldTriggerBulletCam(bot, info, muzzle, impactPoint))
                 {
@@ -90,9 +107,9 @@ namespace GeoSniper
             if (!hitEnemy)
             {
                 SniperPresentation.SpawnSurfaceImpact(impactPoint,hitCollider);
-                EnemyBot.NotifyMissedShot(muzzle, impactPoint);
                 weapon?.RecordMissImpact(impactPoint);
             }
+            EnemyBot.NotifyMissedShot(ray.origin, impactPoint, hasHit);
             weapon?.ShotWithTracer(muzzle, impactPoint, hitEnemy);
             ShotResolved?.Invoke(hitEnemy);
         }
@@ -500,11 +517,8 @@ namespace GeoSniper
                     SniperPresentation.SpawnImpactSparks(targetPos);
                     SpawnHeadshotShockwave(targetPos, flightDir);
 
-                    if (audio != null)
-                    {
-                        audio.PlayOneShot(ProceduralAudio.CreateHeadshotPing(), 1.0f);
-                        audio.PlayOneShot(ProceduralAudio.CreateBodyHitThud(), 0.9f);
-                    }
+                    // The damage event already played the single confirmed impact.
+
                 }
 
                 // Micro-freeze impact hold (0.32s realtime)
@@ -647,6 +661,7 @@ namespace GeoSniper
             Vector3 position = ray.origin;
             // A round retains its fired stats when the player switches rifles.
             float damage = config.baseDamage, headMultiplier = config.headshotMultiplier, limbMultiplier = config.limbMultiplier;
+            bool lethalHeadshots=config.lethalHeadshots;
             float gravity = config.gravityMultiplier;
             int penetrations = 0;
             Vector3 velocity = ray.direction * config.bulletSpeed;
@@ -673,10 +688,11 @@ namespace GeoSniper
                 
                 // Prioritize collision query along bullet travel step using AimAssist for micro-pixel tolerance
                 var step = nextPosition - position;
-                if (step.sqrMagnitude > 0 && SniperHitQuery.TryCastAimAssist(new Ray(position, step.normalized), enemies, player, cameraView.transform, out var hit, step.magnitude))
+                if (step.sqrMagnitude > 0 && SniperHitQuery.TryCastAimAssist(new Ray(position, step.normalized), ShotTargets, player, cameraView.transform, out var hit, step.magnitude))
                 {
+                    EnemyBot.NotifyMissedShot(position, hit.Point);
                     var enemy = hit.Collider.GetComponentInParent<EnemyBot>();
-                    bool hitEnemy = (enemy != null);
+                    bool hitEnemy = enemy != null || hit.Collider.GetComponentInParent<GeoSniper.Duel.DuelOpponentAvatar>() != null;
 
                     if (!hitEnemy && penetrations < 4 && SniperHitQuery.TryPenetrate(hit,step.normalized,out var exit))
                     {
@@ -689,7 +705,7 @@ namespace GeoSniper
                         yield return null;
                         continue;
                     }
-                    var info = DamageSystem.ProcessHit(hit.Collider, damage, hit.Point, headMultiplier, limbMultiplier);
+                    var info = DamageSystem.ProcessHit(hit.Collider, damage, hit.Point, headMultiplier, limbMultiplier, ray.origin, lethalHeadshots);
 
                     if (hitEnemy)
                     {
@@ -706,7 +722,6 @@ namespace GeoSniper
                     else
                     {
                         SniperPresentation.SpawnSurfaceImpact(hit.Point,hit.Collider);
-                        EnemyBot.NotifyMissedShot(muzzle, hit.Point);
                         weapon?.RecordMissImpact(hit.Point);
                     }
 
@@ -715,13 +730,14 @@ namespace GeoSniper
                     yield break;
                 }
                 
+                EnemyBot.NotifyMissedShot(position, nextPosition, false);
                 position = nextPosition;
                 elapsedTime += dt;
                 yield return null;
             }
             
             // Missed everything
-            EnemyBot.NotifyMissedShot(muzzle, position);
+            EnemyBot.NotifyMissedShot(position, position, false);
             weapon?.RecordMissImpact(position);
             weapon?.ResolveProjectileVisual(muzzle, position, false);
             ShotResolved?.Invoke(false);
@@ -730,7 +746,7 @@ namespace GeoSniper
         private static float lastBulletCamTime = -30f;
         private bool ShouldTriggerBulletCam(EnemyBot bot, DamageInfo info, Vector3 muzzle, Vector3 impact)
         {
-            if (bot == null) return false;
+            if (bot == null || (weapon!=null && WeaponCatalog.Get(weapon.CurrentWeaponIndex).Automatic)) return false;
             bool isKill = bot.Actor != null && bot.Actor.IsDead;
             if (!isKill) return false;
 

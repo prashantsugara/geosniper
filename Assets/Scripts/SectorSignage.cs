@@ -24,20 +24,25 @@ namespace GeoSniper
                 var lines = new List<string>();
                 AddCaption(lines, Caption(building));
                 captions.Add(building, lines);
+                if(IsShop(building))faces[building]=PlaceFace(building);
             }
             var standalone = new List<MapFeature>();
+            var shopHosts=new HashSet<MapFeature>();
             foreach (var place in world.Features)
             {
                 if (place.Kind != "place" || string.IsNullOrWhiteSpace(Caption(place))) continue;
                 Vector2 point = Center(place.Points);
                 MapFeature host = FindHost(place, world.Buildings.Keys, world.Features);
-                if (host != null) { AddCaption(captions[host], Caption(place)); if(!faces.ContainsKey(host)) faces[host]=PlaceFace(place); }
-                else if(!IsShop(place)) standalone.Add(place);
+                if (host != null) { AddCaption(captions[host], Caption(place)); if(!faces.ContainsKey(host)) faces[host]=PlaceFace(place); if(IsShop(place))shopHosts.Add(host); }
+                else if(IsShop(place))world.BuildMappedShopKiosk(place,PlaceFace(place),post);
+                else standalone.Add(place);
             }
             foreach (var pair in captions)
             {
                 if (pair.Value.Count == 0) continue;
-                BuildFacade(world, pair.Key, string.Join("\n", pair.Value), faces.TryGetValue(pair.Key,out var categoryFace)?categoryFace:face);
+                // The pilot's entrance already owns a deliberately sized shop sign/canopy.
+                if(MapFeatureStyle.Text(pair.Key,"street_study")=="true" && !string.IsNullOrWhiteSpace(pair.Key.Name) && world.Buildings[pair.Key].GetComponentInChildren<EnterableBuilding>()!=null)continue;
+                BuildFacade(world, pair.Key, string.Join("\n", pair.Value), faces.TryGetValue(pair.Key,out var categoryFace)?categoryFace:face,shopHosts.Contains(pair.Key)||IsShop(pair.Key));
             }
             var placed = new List<Vector2>();
             foreach (var place in standalone)
@@ -57,6 +62,8 @@ namespace GeoSniper
 
         public static bool IsShop(MapFeature place)
         {
+            string shop=MapFeatureStyle.Text(place,"shop");
+            if(shop.Length>0)return shop!="no" && shop!="vacant";
             string category=MapFeatureStyle.Text(place,"category");
             // Overture's generic fallback landmark also labels non-retail places as shops.
             // Prefer the actual category whenever it is available.
@@ -97,13 +104,26 @@ namespace GeoSniper
             if (!string.IsNullOrWhiteSpace(feature.Name))
             {
                 string category=MapFeatureStyle.Category(feature);
-                return feature.Name.Trim()+(category.Length>0 && feature.Kind=="place"?"\n"+category:"");
+                return feature.Name.Trim()+(category.Length>0 && (feature.Kind=="place" || IsShop(feature))?"\n"+category:"");
             }
-            return feature.Landmark == "fuel" ? "Petrol pump" : feature.Landmark == "police" ? "Police station" : feature.Landmark == "shop" ? "Shop" : "";
+            return feature.Landmark == "fuel" ? "Petrol pump" : feature.Landmark == "police" ? "Police station" : IsShop(feature) ? MapFeatureStyle.Category(feature) : "";
         }
 
-        static void BuildFacade(SectorWorld world, MapFeature building, string caption, Material face)
+        static void BuildFacade(SectorWorld world, MapFeature building, string caption, Material face,bool shop=false)
         {
+            if(MapFeatureStyle.Text(building,"street_study")=="true")
+            {
+                var host=world.Buildings[building];var interior=host.GetComponentInChildren<EnterableBuilding>();
+                if(interior!=null)
+                {
+                    // A mapped POI can name an otherwise unnamed building. Reuse its real
+                    // entrance/canopy, rather than layering the old large sign and awning over it.
+                    var outward=interior.transform.TransformDirection(interior.EntranceOutward);
+                    var position=world.transform.InverseTransformPoint(interior.transform.TransformPoint(interior.Entrance+Vector3.up*3.5f)+outward*.2f);
+                    var pilotSign=WorldSign.Create(world.transform,caption.Split('\n')[0],position,Quaternion.LookRotation(outward),new Vector2(4.2f,.48f),face,false);
+                    pilotSign.transform.SetParent(host.transform,true);return;
+                }
+            }
             float best = float.MaxValue;
             Vector3 selected = default;
             Vector2 normal = default, size = default;
@@ -133,6 +153,7 @@ namespace GeoSniper
             var sign = WorldSign.Create(world.transform, caption, selected, Quaternion.LookRotation(To3(normal, 0)), size, face, false);
             // Keep ownership explicit for validation and future building streaming.
             sign.transform.SetParent(world.Buildings[building].transform, true);
+            if(shop)world.BuildMappedShopFront(building,selected,Quaternion.LookRotation(To3(normal,0)),size.x,face);
         }
 
         public static void BuildRoads(SectorWorld world, List<MapFeature> features, Material face, Material post)
@@ -216,7 +237,7 @@ namespace GeoSniper
             return false;
         }
 
-        static Vector2 NearestRoad(List<MapFeature> features, Vector2 point)
+        public static Vector2 NearestRoad(List<MapFeature> features, Vector2 point)
         {
             float best = float.MaxValue;
             Vector2 result = point + Vector2.up;

@@ -12,7 +12,8 @@ Publisher must confirm against the final SDKs, network requests and service cont
 | Advertising/consent | Google Mobile Ads and UMP | Review identifiers, approximate location, interactions, diagnostics and other SDK-disclosed data; configure regional consent messages. |
 | Optional gameplay analytics | Firebase Analytics and Unity Analytics SDKs after separate in-game opt-in | Review app/device identifiers, usage events, SDK diagnostics, sharing, deletion and regional consent; verify the final AAB and both providers' current disclosures. |
 | Support | User-initiated email | Define handling, access, deletion and retention for support correspondence. |
+| Online duels | Unity anonymous Authentication and DTLS Relay; callsigns, weapon/game state and host-selected map coordinates are transmitted | Review player identifiers, IP/connection metadata, gameplay and location data, Unity's service-provider role and retention. Choosing a live-location map shares that location with the opponent. |
 
 Use Google's [Mobile Ads SDK disclosure guide](https://developers.google.com/admob/android/privacy/play-data-disclosure) and actual integration configuration. Consent is not equivalent to declaring that the SDK collects nothing. Check data encryption, deletion-request handling, service-provider exceptions, purposes and any audience-specific requirements in Play Console.
 
-No account/login or crash-reporting service was added in this pass. Review final packaged dependencies and traffic rather than relying only on this statement. Re-review Play Console Data safety before release because optional analytics SDKs were added after the previous declaration review.
+Unity anonymous Authentication was added for Relay multiplayer; there is no player-facing email/password login. Review final packaged dependencies and traffic. Re-review Play Console Data safety before release for analytics and multiplayer services.

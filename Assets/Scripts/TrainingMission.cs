@@ -112,20 +112,20 @@ namespace GeoSniper
             if(zoom && !Finished) presentation.DrawScope(w,h);
             var style=new GUIStyle(GUI.skin.box){fontSize=20,alignment=TextAnchor.MiddleCenter};
             GUI.Box(new Rect(15,15,w-130,55),"ROOFTOP RANGE   |   TARGETS "+hits+" / 6   |   "+Mathf.CeilToInt(remaining)+"s   |   AMMO "+ammo+" / 5   |   SCORE "+score,style);
-            if(GUI.Button(new Rect(w-105,15,90,55),presentation.Muted?"UNMUTE":"MUTE")) presentation.ToggleMute();
+            if(TacticalGUI.DrawButton(new Rect(w-105,15,90,55),presentation.Muted?"UNMUTE":"MUTE")) presentation.ToggleMute();
             GUI.Label(new Rect(15,h-25,w-30,25),"LIVE CONTRACT 01  |  Fictional targets in a real-world sector");
             if(Finished)
             {
                 GUI.Box(new Rect(w/2-210,h/2-115,420,205),(hits==6?"MISSION COMPLETE":"TIME EXPIRED")+"\n"+hits+" / 6 targets  |  "+score+" points\nSTREAK x"+combo,style);
-                if(GUI.Button(new Rect(w/2-100,h/2+20,200,50),"RETRY MISSION")) Begin(cameraView);
+                if(TacticalGUI.DrawButton(new Rect(w/2-100,h/2+20,200,50),"RETRY MISSION")) Begin(cameraView);
                 return;
             }
             GUI.color=flash>0?Color.yellow:Color.white;
             GUI.DrawTexture(new Rect(w/2-18,h/2-1,36,2),Texture2D.whiteTexture);
             GUI.DrawTexture(new Rect(w/2-1,h/2-18,2,36),Texture2D.whiteTexture); GUI.color=Color.white;
-            if(GUI.Button(new Rect(20,h-95,125,65),zoom?"UNSCOPE [Z]":"SCOPE [Z]")) zoom=!zoom;
-            if(GUI.Button(new Rect(w/2-65,h-95,130,65),reload>0?"RELOADING...":"RELOAD [R]")) Reload();
-            if(GUI.Button(new Rect(w-150,h-95,130,65),"FIRE [SPACE]")) Fire();
+            if(TacticalGUI.DrawButton(new Rect(20,h-95,125,65),zoom?"UNSCOPE [Z]":"SCOPE [Z]")) zoom=!zoom;
+            if(TacticalGUI.DrawButton(new Rect(w/2-65,h-95,130,65),reload>0?"RELOADING...":"RELOAD [R]")) Reload();
+            if(TacticalGUI.DrawButton(new Rect(w-150,h-95,130,65),"FIRE [SPACE]")) Fire();
             if(hitPop>0) GUI.Label(new Rect(w/2-150,h/2-120-hitPop*25,300,50),"+"+(100*combo)+"   COMBO x"+combo,new GUIStyle(GUI.skin.label){fontSize=28,alignment=TextAnchor.MiddleCenter,fontStyle=FontStyle.Bold});
             GUI.Label(new Rect(20,80,w-40,40),"LIVE TARGETS  |  Build a streak before the contract expires",new GUIStyle(GUI.skin.label){fontSize=18,alignment=TextAnchor.MiddleCenter});
         }

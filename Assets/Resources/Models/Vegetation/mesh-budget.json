@@ -1,0 +1,26 @@
+[
+  {
+    "name": "BroadleafTree",
+    "triangles": 16000
+  },
+  {
+    "name": "SpreadingTree",
+    "triangles": 16000
+  },
+  {
+    "name": "RoundedShrub",
+    "triangles": 2000
+  },
+  {
+    "name": "ConeShrub",
+    "triangles": 2000
+  },
+  {
+    "name": "LowShrub",
+    "triangles": 2000
+  },
+  {
+    "name": "TallShrub",
+    "triangles": 2000
+  }
+]

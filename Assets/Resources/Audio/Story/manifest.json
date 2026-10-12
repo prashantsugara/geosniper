@@ -1,0 +1,1012 @@
+[
+  {
+    "id": 0,
+    "part": "Mission",
+    "file": "Mission_00.wav",
+    "textHash": "03c5c21202835cf8eabccf694dc5eec679224101b2f62ff5eb6dd95fc1e69fce",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook, this is Command. Your scout is marked. Take the rooftop shot, or use the stairs and windows. Watch his patrol. Once he is down, withdraw to the green beacon and hold for extraction.",
+    "seconds": 12.83
+  },
+  {
+    "id": 0,
+    "part": "Outcome",
+    "file": "Outcome_00.wav",
+    "textHash": "8c39839110d44b704be6aabe922db6ea5f320f4bd5889b314d4126a7fd5674aa",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The scout carried a forged evacuation route. Cartographer Mina says the error was deliberate.",
+    "seconds": 6.49
+  },
+  {
+    "id": 1,
+    "part": "Mission",
+    "file": "Mission_01.wav",
+    "textHash": "908f1b02623457cb8245164c027a22b23c00f601be5603f0d6f8b0cfd25103b3",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Mina is moving through the district. Armed patrols are closing in. Cover her route. Keep her alive until she reaches our extraction vehicle.",
+    "seconds": 10.01
+  },
+  {
+    "id": 1,
+    "part": "Outcome",
+    "file": "Outcome_01.wav",
+    "textHash": "db774c328402f737bcc0374d95e571abd08e8acd12c57522f2358fd70be279ee",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Mina escapes. The forged routes all pass Meridian checkpoints.",
+    "seconds": 4.49
+  },
+  {
+    "id": 2,
+    "part": "Mission",
+    "file": "Mission_02.wav",
+    "textHash": "10a442919f00540bce5b02ab470d4a72dec54f81c3e1eb6ca8c47b228899c3c6",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. The marked courier has the checkpoint schedule. Watch his route. Lead your shot. Stop him before he reaches the exit.",
+    "seconds": 8.29
+  },
+  {
+    "id": 2,
+    "part": "Outcome",
+    "file": "Outcome_02.wav",
+    "textHash": "5f4e430d88f07a05905339449475b4d5fb34e99adee586c6534c5c9d4e277b79",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The schedule points to an abandoned survey office. Every page bears the same symbol: a broken compass.",
+    "seconds": 7.45
+  },
+  {
+    "id": 3,
+    "part": "Mission",
+    "file": "Mission_03.wav",
+    "textHash": "dfe5f39747e2017ae7e662c74b3859cb3c8ff1b37b27a3b74c0c33875807ca7a",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. The survey office is watched by Meridian sentries. Clear its security ring without triggering the alarm. Mina needs time to compare the original street records with the forged routes. Eliminate the sentries before the alarm reaches its limit.",
+    "seconds": 16.75
+  },
+  {
+    "id": 3,
+    "part": "Outcome",
+    "file": "Outcome_03.wav",
+    "textHash": "48d3a30915444c482b1866e88f46b94b8b2f11caf70a442e12bc4934603f77c6",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Mina finds that the map was altered using a government access key.",
+    "seconds": 4.49
+  },
+  {
+    "id": 4,
+    "part": "Mission",
+    "file": "Mission_04.wav",
+    "textHash": "10d1319d19e2fa92e883ac14c69e118852b1110802707a144774bdf34c7cd551",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. The office records are being scattered across nearby caches. Recover both copies and leave with the proof. Meridian guards are expendable to their employer; the evidence is what matters. Recover two marked evidence caches, then reach the exit.",
+    "seconds": 16.5
+  },
+  {
+    "id": 4,
+    "part": "Outcome",
+    "file": "Outcome_04.wav",
+    "textHash": "ae657cc3cbcaf5a1c6fe2a864432a8701b5663e656e6c43c5b6a8324780a4371",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The copies name a signal contractor and a payment account registered to Director Vale.",
+    "seconds": 5.64
+  },
+  {
+    "id": 5,
+    "part": "Mission",
+    "file": "Mission_05.wav",
+    "textHash": "66aa0890d9ed6e4143f2a707a953c7fa93b2879819aa948d8917c1374443b7dd",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Meridian's relay lets its spotters share your position. Disable both local terminals. The first outage will alert their patrols, so choose cover before you start the second shutdown. Disable both relay terminals, then withdraw to the exit.",
+    "seconds": 16.84
+  },
+  {
+    "id": 5,
+    "part": "Outcome",
+    "file": "Outcome_05.wav",
+    "textHash": "456a55cc6717e1c34239d11cb6ce3c764702f6e3e2cf6f453a56877fea893c58",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "A stranded operator sends one last message: 'Ghost was ordered to erase the witnesses.'",
+    "seconds": 6.28
+  },
+  {
+    "id": 6,
+    "part": "Mission",
+    "file": "Mission_06.wav",
+    "textHash": "d64c49154b28aa574d6cf716c6542ab02cfad47cd4456d83af3595963454e916",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. The checkpoint commander is selling civilians a false safe route. His rooftop lookout protects the operation. Remove the commander and any counter-sniper so Mina can warn the district. Eliminate the marked commander and his counter-sniper.",
+    "seconds": 16.16
+  },
+  {
+    "id": 6,
+    "part": "Outcome",
+    "file": "Outcome_06.wav",
+    "textHash": "69bdba1f77813e5460f2e9496ade18002487f2cd70df64e1c32ddc4c14f0c3de",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The commander kept photographs of missing survey workers, including your brother Eli.",
+    "seconds": 5.23
+  },
+  {
+    "id": 7,
+    "part": "Mission",
+    "file": "Mission_07.wav",
+    "textHash": "e2ed9b25785f6016d9d23e76d7c105cc3bededb85b51464c30ba0fde821bd348",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Jo, the relay technician, survived the shutdown. Meridian has cornered him before he can testify. Reach him, hold your position to release him, then cover his run to extraction. Reach and release Jo, then protect his escape.",
+    "seconds": 16.31
+  },
+  {
+    "id": 7,
+    "part": "Outcome",
+    "file": "Outcome_07.wav",
+    "textHash": "7a10851c12cb8335504d79bae3a95f21f27a9d97c2daa41b92c8f787470b4e7c",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Jo says Ghost refused an order to kill Eli. The marksman may be an enemy you can turn.",
+    "seconds": 6.11
+  },
+  {
+    "id": 8,
+    "part": "Mission",
+    "file": "Mission_08.wav",
+    "textHash": "a66eb70d22e152edcd61d135df7ed089138ec194c10ffd157f8a83a7321246e0",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Meridian found Jo's evacuation channel. Hold against the assault teams while Mara brings in a helicopter. Reload between waves and move to extraction only when the landing zone opens. Survive three waves, then board the extraction helicopter.",
+    "seconds": 17.74
+  },
+  {
+    "id": 8,
+    "part": "Outcome",
+    "file": "Outcome_08.wav",
+    "textHash": "ba49fef777589e788c1190b8ee7b117e358f0233101fc72c35a830f123a67e2e",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Jo gets out, but Ghost challenges you on an open frequency. He will speak only after you beat him.",
+    "seconds": 6.58
+  },
+  {
+    "id": 9,
+    "part": "Mission",
+    "file": "Mission_09.wav",
+    "textHash": "d4dd7d535342b9dc24f9fdd8405a9162646cf26adef57da42eaa4d0ddc77212d",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Ghost believes you are Vale's executioner. Break his firing locks and defeat him in a sniper duel. You need his testimony more than another name on the casualty list. Defeat Ghost in the rival sniper duel.",
+    "seconds": 14.73
+  },
+  {
+    "id": 9,
+    "part": "Outcome",
+    "file": "Outcome_09.wav",
+    "textHash": "1613e8f94f813f34979a8a82454c7aac1bf563779e4a14021fb1529dce612023",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Ghost yields and sends a shipping manifest. Eli is alive, held by Meridian's logistics division.",
+    "seconds": 7.11
+  },
+  {
+    "id": 10,
+    "part": "Mission",
+    "file": "Mission_10.wav",
+    "textHash": "30e91b87c676bfbf88e63183fd2bf50e33131dd08f50671c622a9f9a5c089cd0",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Ghost's manifest is encrypted in two separate records. Reach the marked caches and extract both. Mina can trace the prisoner transfer only if the pages stay together. Recover both manifest records and reach the exit.",
+    "seconds": 15.65
+  },
+  {
+    "id": 10,
+    "part": "Outcome",
+    "file": "Outcome_10.wav",
+    "textHash": "8aa0bd7a91664b3551cde478ae3d184693a346aa5ab0095383938e9707f2e569",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The manifest hides prisoner transfers inside medical freight payments.",
+    "seconds": 4.68
+  },
+  {
+    "id": 11,
+    "part": "Mission",
+    "file": "Mission_11.wav",
+    "textHash": "3f0f45f1e348019af2d53d890d694d9fd97002946d7ca04fedcf08d5a81cb55a",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Dr. Imani treated the transferred prisoners. Meridian intends to silence her before she reaches Mara's vehicle. Give her a clear route and prioritize the attackers closing on her. Keep Dr. Imani alive until extraction.",
+    "seconds": 16.61
+  },
+  {
+    "id": 11,
+    "part": "Outcome",
+    "file": "Outcome_11.wav",
+    "textHash": "5df4c851db426d2859e886e99138d1217189ec186139c27c73c07d0f70a0d120",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Imani confirms Eli was moved after refusing to design false evacuation routes.",
+    "seconds": 6.15
+  },
+  {
+    "id": 12,
+    "part": "Mission",
+    "file": "Mission_12.wav",
+    "textHash": "f37893ac0e8c411f552b6f0015b845412ada143e465f5a3e609880bc336a8dd6",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Meridian's paymaster is meeting the transport guards. End his operation and remove his lookout. His encrypted receipts will expose who funds the false checkpoints. Eliminate the paymaster and any counter-sniper.",
+    "seconds": 14.75
+  },
+  {
+    "id": 12,
+    "part": "Outcome",
+    "file": "Outcome_12.wav",
+    "textHash": "7758a4b6305429428a359ec75c8322bcc9e2cd8a910b0856a0b878a9dfbb8393",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The receipts connect Vale's office to a private emergency-services contract.",
+    "seconds": 4.91
+  },
+  {
+    "id": 13,
+    "part": "Mission",
+    "file": "Mission_13.wav",
+    "textHash": "5fdd5e5bb35979db15afc9f23cbcd3771db81734d73af870e66be2504a892a0a",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. The paymaster's guards are forwarding the receipts to Vale. Shut down three relay terminals before that network recovers. Expect the surviving guards to rush your position after each shutdown. Disable three relay terminals and reach the exit.",
+    "seconds": 16.88
+  },
+  {
+    "id": 13,
+    "part": "Outcome",
+    "file": "Outcome_13.wav",
+    "textHash": "be3fe46a09429c9e347d1f9c0c8979c7aa56c25cc32f4e87d0ed54e900d4c427",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Mina intercepts a backup address before the relays fall silent.",
+    "seconds": 4.15
+  },
+  {
+    "id": 14,
+    "part": "Mission",
+    "file": "Mission_14.wav",
+    "textHash": "7b623fff0adf3a58d0754d6d777332df56a99cad5496ab275671c3c95b674962",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. A courier has the backup key. Ghost will watch the rooftops while you track the runner through the street corridor. Stop him before the key reaches the transport division. Intercept the courier before his exit or the timer expires.",
+    "seconds": 15.69
+  },
+  {
+    "id": 14,
+    "part": "Outcome",
+    "file": "Outcome_14.wav",
+    "textHash": "f2158bc863770b13c54d32d98351f839c06da50ef4f05a8c560545300b5a85f7",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The key opens a transfer record signed by Warden, Meridian's prison marksman.",
+    "seconds": 5.41
+  },
+  {
+    "id": 15,
+    "part": "Mission",
+    "file": "Mission_15.wav",
+    "textHash": "379c134fb5d0450f3ec38083ee4455b6f2119d1965ea769cd4b145ff0cda0893",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. The transfer station is empty, but its guards are still sweeping for witnesses. Clear the sentries quietly. A loud alarm will give Warden enough warning to move the remaining prisoners. Clear the sentries without triggering lockdown.",
+    "seconds": 15.56
+  },
+  {
+    "id": 15,
+    "part": "Outcome",
+    "file": "Outcome_15.wav",
+    "textHash": "fed53de5b92835cc3fbadc0db7496410706ea5ec485f37d4bad190d581af5483",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The prisoners left minutes ago. One guard's radio is still connected to Warden.",
+    "seconds": 5.28
+  },
+  {
+    "id": 16,
+    "part": "Mission",
+    "file": "Mission_16.wav",
+    "textHash": "9408891856b3e4c1be7811c8cb38abf0845b8b64ff8244ce2474e8fbf7bf671b",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. A driver named Sam was left behind after the transfer. Reach him before the guards finish their search, release him and cover his escape. He remembers which vehicle carried Eli. Release Sam and protect him to extraction.",
+    "seconds": 15.33
+  },
+  {
+    "id": 16,
+    "part": "Outcome",
+    "file": "Outcome_16.wav",
+    "textHash": "77b5533c020664f95c863335c4922f332e72f4405bb70c5c55654e4e0ed4e217",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Sam saw Eli enter a vehicle marked 'Civic Survey'. Mina recognizes the company.",
+    "seconds": 5.81
+  },
+  {
+    "id": 17,
+    "part": "Mission",
+    "file": "Mission_17.wav",
+    "textHash": "66ccddb476acd3fcf33c6843eb2267d5de15c76c51c1bfefa6cf4be7a126a20d",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Civic Survey stores its contracts in three field caches. Collect them and leave with the files. The company is a shell; finding the person behind it matters more than clearing every patrol. Collect three contract files and reach the exit.",
+    "seconds": 16.95
+  },
+  {
+    "id": 17,
+    "part": "Outcome",
+    "file": "Outcome_17.wav",
+    "textHash": "d30ba0378e736a3d56aeced3b521d10ee904247b306fbf0fc6afd9f6bf5d06a0",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The contracts describe Glass Meridian: a manufactured crisis followed by a paid 'rescue'.",
+    "seconds": 6.43
+  },
+  {
+    "id": 18,
+    "part": "Mission",
+    "file": "Mission_18.wav",
+    "textHash": "bea34199542418a8930241fd4ac0fe21a7cc991126bdad60c2ef2e3610741186",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Vale has ordered the evidence destroyed and your team erased. Defend the evacuation zone through successive assaults. Mina needs every second of the hold to copy the contracts off the device. Survive the assault waves and board the helicopter.",
+    "seconds": 16.82
+  },
+  {
+    "id": 18,
+    "part": "Outcome",
+    "file": "Outcome_18.wav",
+    "textHash": "705a402f31867e141806fd8fe5e068b0e2105bdc07aa0a49ed94720077a8eb6f",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The contracts survive. Warden blocks the next transfer route and demands a duel.",
+    "seconds": 5.38
+  },
+  {
+    "id": 19,
+    "part": "Mission",
+    "file": "Mission_19.wav",
+    "textHash": "0f4465d3ac9e600e724d3240880e98d5192e39f311944b3a71ead8014c5f60e5",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Warden controls the prisoner route from high ground. Ghost has given you his firing habits: a fast lock, then a pause to reposition. Use cover, break the lock and win the duel. Defeat Warden and reopen the prisoner route.",
+    "seconds": 15.86
+  },
+  {
+    "id": 19,
+    "part": "Outcome",
+    "file": "Outcome_19.wav",
+    "textHash": "88cca360cb193780c27f9c8b777b6c4153a26214aef11d57bd81534ae2545759",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Warden's radio reveals a disturbing detail: Vale has been reading Mara's dispatches.",
+    "seconds": 6.51
+  },
+  {
+    "id": 20,
+    "part": "Mission",
+    "file": "Mission_20.wav",
+    "textHash": "23612d084cf9f67f1bd207721e0645ce13691345bc55519ff0f81aa9bf2e4ec5",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Mara fears someone inside her team is feeding Vale. Two guarded dispatch archives hold the proof. Accessing a log reveals your position and brings Meridian's response team. Recover both logs, then hold the extraction zone for twelve seconds. Mina will compare the timestamps instead of trusting another accusation. Recover both guarded dispatch logs and hold extraction for 12 seconds.",
+    "seconds": 25.16
+  },
+  {
+    "id": 20,
+    "part": "Outcome",
+    "file": "Outcome_20.wav",
+    "textHash": "16b6f7b9b1c696e8c817159b77d8188ae71be39811294247925fcc3a34a0b0d5",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The leak is upstream of Mara. Vale's office has a copy of every mission order.",
+    "seconds": 5.45
+  },
+  {
+    "id": 21,
+    "part": "Mission",
+    "file": "Mission_21.wav",
+    "textHash": "c9719f6bc80bb99f9f44d7d3dd1dc2ed14acfbedda6e2cf4d1199d773d6daa5b",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Three access terminals are forwarding Mara's orders. Disconnect them while the team changes its communications keys. Once the first terminal falls, the patrols will know where to look. Disable all three forwarding terminals and withdraw.",
+    "seconds": 16.37
+  },
+  {
+    "id": 21,
+    "part": "Outcome",
+    "file": "Outcome_21.wav",
+    "textHash": "fd6bd569a57df9bacfc0df60ccbd7cf8f8039609e01e02231c9200d6a22ce9e4",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Mara takes the team off the official channel. For the first time, Vale cannot see your next move.",
+    "seconds": 6.43
+  },
+  {
+    "id": 22,
+    "part": "Mission",
+    "file": "Mission_22.wav",
+    "textHash": "97bfcbba4448070e5afd8b9a0395f079845d5c280b52bb97a48cbb0ee3396493",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. An auditor named Nia has traced Vale's access key. Her escort was compromised, so you must cover her on foot. Keep her alive until she reaches Mara's unmarked extraction vehicle. Protect Nia through the street route to extraction.",
+    "seconds": 16.39
+  },
+  {
+    "id": 22,
+    "part": "Outcome",
+    "file": "Outcome_22.wav",
+    "textHash": "d69e6ebe43f36c4ba18b596142ae4cd506e6861bebd37f73f8de2c3693d9817c",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Nia brings proof that Vale created the access key himself.",
+    "seconds": 3.83
+  },
+  {
+    "id": 23,
+    "part": "Mission",
+    "file": "Mission_23.wav",
+    "textHash": "21ad27c4ecdd4cf71202f23024568786f7f12dc846d03dfbd858dcf1d91f0bac",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Vale has sent a hunter wearing your team's insignia. His orders are to kill witnesses and blame Rook. Identify the marked commander and remove his rooftop support before he reaches another checkpoint. Eliminate the impersonator and his counter-sniper.",
+    "seconds": 17.48
+  },
+  {
+    "id": 23,
+    "part": "Outcome",
+    "file": "Outcome_23.wav",
+    "textHash": "7202fccabbe902b056b7c9f5de8c0eb37a093d11d7ceea1b1e955952df2a18b6",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The false insignia is part of Vale's plan to make the real rescue team look responsible.",
+    "seconds": 6.13
+  },
+  {
+    "id": 24,
+    "part": "Mission",
+    "file": "Mission_24.wav",
+    "textHash": "92a96200873376e10e11a4a20ca8c305bde956dccbd889579c95d9661404b3c2",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Nia found one missing receipt. Its carrier is leaving with the only record linking Vale to Meridian's assault units. Stop the courier before the document disappears into the next district. Intercept the receipt courier before he escapes.",
+    "seconds": 16.65
+  },
+  {
+    "id": 24,
+    "part": "Outcome",
+    "file": "Outcome_24.wav",
+    "textHash": "33e11d50d1ccddb49df5eb41ab357282605b5276930233fe73372691b2eb203d",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The receipt names Viper, the sniper hired to make the forged crisis look real.",
+    "seconds": 5.38
+  },
+  {
+    "id": 25,
+    "part": "Mission",
+    "file": "Mission_25.wav",
+    "textHash": "6a3a93ee4c0a6c12761ddfc41e0fd99fc5ca9eddfdc9cbee44edd506effb87c1",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Viper's spotters are tracking Mina's new channel. Clear their sentries before the alarm peaks. Ghost warns that their overlapping patrols will punish a careless second shot. Clear the listening-post sentries without lockdown.",
+    "seconds": 15.67
+  },
+  {
+    "id": 25,
+    "part": "Outcome",
+    "file": "Outcome_25.wav",
+    "textHash": "fc9881b72a125bf10ad2959cdfb17fb4ef3d9b495a7b31c09b72f259715cd5c3",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Mina finds an old recording of Eli refusing Vale's order. She wants to publish it.",
+    "seconds": 5.83
+  },
+  {
+    "id": 26,
+    "part": "Mission",
+    "file": "Mission_26.wav",
+    "textHash": "f4ca079a95207efc4c97bfb6502d0318921cc8d14804a8d49bf148db8f73f014",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Eli's recording has two damaged fragments. Recover both field backups and reach the exit. Mina can restore the audio, but only if you bring back the original data. Collect both recording backups and extract.",
+    "seconds": 15.13
+  },
+  {
+    "id": 26,
+    "part": "Outcome",
+    "file": "Outcome_26.wav",
+    "textHash": "5830bec5bbb0e0d69340daba5f6ecddcb3d334c201f274897e824b20087fde85",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Eli's voice confirms the plan: close real routes, advertise false ones, then sell the rescue.",
+    "seconds": 6.47
+  },
+  {
+    "id": 27,
+    "part": "Mission",
+    "file": "Mission_27.wav",
+    "textHash": "0e32ec307dd30379dfacde6eb87b32c5c8526bad482b95ceff7e7e46fb134124",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Nia's cover has been blown. Meridian's 'rescue' team is holding her for a staged transfer. Reach her yourself, release her and protect her until Mara's vehicle arrives. Release Nia and escort her to the real extraction.",
+    "seconds": 15.97
+  },
+  {
+    "id": 27,
+    "part": "Outcome",
+    "file": "Outcome_27.wav",
+    "textHash": "27ea366dc727b13a0320c3cfd283480afb267038a2ab675d8b6f179d0589bd23",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Nia identifies the first emergency district Vale plans to seal.",
+    "seconds": 4.74
+  },
+  {
+    "id": 28,
+    "part": "Mission",
+    "file": "Mission_28.wav",
+    "textHash": "08ad8f79c3043118382ab5b595071c96c339e756d9023b1ce601cf2accc914a9",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Publishing Eli's recording exposes your sector. Hold against the incoming waves while Mina finishes the upload. The helicopter will not enter until the approach is clear. Hold through three waves, then board extraction.",
+    "seconds": 15.43
+  },
+  {
+    "id": 28,
+    "part": "Outcome",
+    "file": "Outcome_28.wav",
+    "textHash": "f12dc34f9270fb2d0e0fda33d90727f3d0cf34fe83b8f96b33fe1d0e104a366c",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The recording reaches the public. Viper starts hunting the team personally.",
+    "seconds": 4.79
+  },
+  {
+    "id": 29,
+    "part": "Mission",
+    "file": "Mission_29.wav",
+    "textHash": "d3786a3c942ffa1d7a18fd92a4c84b4fcd4e2328872e2aea905dbe876b46a536",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Viper intends to end the story with your death. His lock is shorter than Warden's; a long peek is a losing trade. Defeat him so Mina can move the evidence into the threatened district. Defeat Viper in the rival sniper duel.",
+    "seconds": 15.86
+  },
+  {
+    "id": 29,
+    "part": "Outcome",
+    "file": "Outcome_29.wav",
+    "textHash": "306d7e9d86fbe7ba081aedf88c635a3311a188e83b751eece7f1de2388cf6fab",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Viper's orders reveal that Vale has accelerated Glass Meridian. The crisis begins tonight.",
+    "seconds": 6.77
+  },
+  {
+    "id": 30,
+    "part": "Mission",
+    "file": "Mission_30.wav",
+    "textHash": "f5812d22aa8f744b751ddadfae0aafc374871487a006429f8b4e7c2dd1050c4b",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. A dispatcher named Ada is carrying the real evacuation routes. Keep her alive through the contested corridor. Each attacker you stop buys the district another safe way out. Protect Ada until she reaches extraction.",
+    "seconds": 15.58
+  },
+  {
+    "id": 30,
+    "part": "Outcome",
+    "file": "Outcome_30.wav",
+    "textHash": "c622444e000096eea525bc44cba8949cd1e05d126ac6e813909e4486a8c4c2fa",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Ada restores the first evacuation route. Vale sends assault units to close it again.",
+    "seconds": 6.11
+  },
+  {
+    "id": 31,
+    "part": "Mission",
+    "file": "Mission_31.wav",
+    "textHash": "6b310957f61c1bcfaf9bea03e65bdaa0a9943b52fb297e09c6aec78c0f39ab49",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Meridian is using three local terminals to issue false closure notices. Shut them down and leave before the patrols regroup. Mina will replace the notices with Ada's verified routes. Disable three closure terminals and withdraw.",
+    "seconds": 16.67
+  },
+  {
+    "id": 31,
+    "part": "Outcome",
+    "file": "Outcome_31.wav",
+    "textHash": "4f6d91d5a4d19da82ba1ffb5ace7dfc1816048d3622e965f41d9ae3212e46bf6",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The notices disappear. Vale switches to a courier network to keep the false orders moving.",
+    "seconds": 6.0
+  },
+  {
+    "id": 32,
+    "part": "Mission",
+    "file": "Mission_32.wav",
+    "textHash": "bb601fce2dc75453a86993195e43f83833bb020ff31e6b6b09217986ea3f341a",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. A courier is carrying the next closure order to the militia. Intercept him while the streets are still open. His escorts are distractions; the marked runner is your objective. Stop the closure courier before he reaches the exit.",
+    "seconds": 15.41
+  },
+  {
+    "id": 32,
+    "part": "Outcome",
+    "file": "Outcome_32.wav",
+    "textHash": "e8fe09567bc92a627c21c38d8510ada4d2c36c5bcc707de38f1482a2d9ee15b6",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The order identifies the commander coordinating the district siege.",
+    "seconds": 4.45
+  },
+  {
+    "id": 33,
+    "part": "Mission",
+    "file": "Mission_33.wav",
+    "textHash": "3776192b2d3c1de35daa9ec2ced6d9c432e62bff11e14198894459653658170e",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. The commander controls the assault teams closing Ada's corridor. Remove him and any rooftop marksman covering the position. Mara needs a clear approach for a witness extraction. Eliminate the siege commander and his counter-sniper.",
+    "seconds": 16.14
+  },
+  {
+    "id": 33,
+    "part": "Outcome",
+    "file": "Outcome_33.wav",
+    "textHash": "66ce5543078000a9e3c782a1826448041dbade23de1c5dd4626aa828d4201e9c",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The commander falls. A survey crew emerges from hiding and asks for help.",
+    "seconds": 5.0
+  },
+  {
+    "id": 34,
+    "part": "Mission",
+    "file": "Mission_34.wav",
+    "textHash": "f0f44833427f34f0ee8e337012fb66e7d9dd946d269c5f5ced94b077dace0e9d",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Crew leader Len knows where Eli was moved after the first transfer. Reach him, release him from cover and protect his route out. His crew cannot survive another false rescue. Release Len and protect his escape.",
+    "seconds": 14.83
+  },
+  {
+    "id": 34,
+    "part": "Outcome",
+    "file": "Outcome_34.wav",
+    "textHash": "7358d8f6e6484226f7d707faeac22e85b8fd4a2c42363d5232acfc1adb3d847a",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Len says Eli is being forced to build Vale's final route map.",
+    "seconds": 3.89
+  },
+  {
+    "id": 35,
+    "part": "Mission",
+    "file": "Mission_35.wav",
+    "textHash": "231b3e0cfe06d848e597dce4c408a3ff764f1eb5b27edf18700556ac02917379",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Len hid three survey records before his capture. Recover them and extract. Mina can identify the final containment zone by comparing Eli's work with the forged evacuation plans. Recover all three survey records and reach the exit.",
+    "seconds": 16.95
+  },
+  {
+    "id": 35,
+    "part": "Outcome",
+    "file": "Outcome_35.wav",
+    "textHash": "f2ac6b0dab591b42f6d6b00902369010caaf517686719432fad6021d8d9c22db",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The containment zone is the district where Vale intends to announce his paid rescue.",
+    "seconds": 5.3
+  },
+  {
+    "id": 36,
+    "part": "Mission",
+    "file": "Mission_36.wav",
+    "textHash": "8e3b5e5fad8fadd7a02b32aae29e8a0e922d1c63c4d8841b51a4bc940409f4f5",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Titan's sentries protect the containment operation. Remove them quietly before Vale announces that the district is sealed. Ghost will watch for the rival sniper, but he cannot stop the patrols for you. Clear the security ring without triggering lockdown.",
+    "seconds": 17.14
+  },
+  {
+    "id": 36,
+    "part": "Outcome",
+    "file": "Outcome_36.wav",
+    "textHash": "f87e40d0d89908238366f9144683b528ba3609153a57b0fa684180e802caad7e",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The team reaches the containment perimeter before Vale's announcement.",
+    "seconds": 4.23
+  },
+  {
+    "id": 37,
+    "part": "Mission",
+    "file": "Mission_37.wav",
+    "textHash": "87eb05ff27823c41141ba7ec56d5aa4e023ab8803a119b13ddc3004817954f04",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Two control terminals are coordinating the perimeter patrols. Disable both and withdraw to the exit. The second terminal sits in the same network; expect the first outage to draw a response. Disable both perimeter terminals and reach the exit.",
+    "seconds": 17.39
+  },
+  {
+    "id": 37,
+    "part": "Outcome",
+    "file": "Outcome_37.wav",
+    "textHash": "3ba08883fe1d4e0600fbdf2fcebda3d54a557ba3a8e162f5fadf24e42941fd6d",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Mina opens a verified corridor through the containment zone.",
+    "seconds": 4.17
+  },
+  {
+    "id": 38,
+    "part": "Mission",
+    "file": "Mission_38.wav",
+    "textHash": "750e12f737f8d674788f6f66b6f77d723bee2e847929715ba745e2c68ad27204",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Meridian is trying to close Mina's corridor by force. Hold the extraction sector while the team gets the witnesses out. Clear each wave before the next approach overwhelms you. Survive three assault waves and board the helicopter.",
+    "seconds": 16.14
+  },
+  {
+    "id": 38,
+    "part": "Outcome",
+    "file": "Outcome_38.wav",
+    "textHash": "d4df4291d5fab708319ff87b0dabf508bb9e6b9d8f6dedc77d6051cc17f46c6c",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The witnesses escape through a real route. Titan challenges the sniper who ruined his perimeter.",
+    "seconds": 6.37
+  },
+  {
+    "id": 39,
+    "part": "Mission",
+    "file": "Mission_39.wav",
+    "textHash": "705ad59a6edc2f3c4a7575cf15494a398ba5e89cff04b9893daa5879ff847d9b",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Titan controls the last firing lane into Eli's holding sector. His heavy shots punish exposure. Make him commit to a lock, break it with cover and defeat him before moving the rescue team. Defeat Titan and open the final approach.",
+    "seconds": 16.61
+  },
+  {
+    "id": 39,
+    "part": "Outcome",
+    "file": "Outcome_39.wav",
+    "textHash": "a46cffb172ba68af1e1db395f47bd4c8319588819d7e0679171641bb477980cc",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Titan's terminal reveals Eli's holding channel. Mara finally hears your brother answer.",
+    "seconds": 6.0
+  },
+  {
+    "id": 40,
+    "part": "Mission",
+    "file": "Mission_40.wav",
+    "textHash": "138df0493d0fabf1f54cbd6353c158c62e22d72ad7d517110015f6167ba11150",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Eli cannot transmit his location openly. He has hidden two signed messages in the field caches. Recover both and extract; Mina can verify that Vale has not replaced his voice with a decoy. Recover both signed messages and reach the exit.",
+    "seconds": 17.99
+  },
+  {
+    "id": 40,
+    "part": "Outcome",
+    "file": "Outcome_40.wav",
+    "textHash": "722fb68c18accdc237a5bf6bd22b7ece656415046560a9f02b49dac3806b5d39",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The signatures match. Eli is alive and has a copy of the original Glass Meridian contract.",
+    "seconds": 6.41
+  },
+  {
+    "id": 41,
+    "part": "Mission",
+    "file": "Mission_41.wav",
+    "textHash": "14eb2a4a99070e466263cc131a8e5e62dc934378bf931cab570518f796c13827",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Vale is preparing a final wave of forged evacuation notices. Disconnect three distribution terminals. Surviving guards will converge after each outage, so do not remain exposed at the controls. Disable three distribution terminals and withdraw.",
+    "seconds": 18.87
+  },
+  {
+    "id": 41,
+    "part": "Outcome",
+    "file": "Outcome_41.wav",
+    "textHash": "d8bfa3629b901df8149f17aaeaa1c78bb64db8222b3f005c61887a09b2222879",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The false notices stop spreading. Ada begins broadcasting verified routes instead.",
+    "seconds": 5.96
+  },
+  {
+    "id": 42,
+    "part": "Mission",
+    "file": "Mission_42.wav",
+    "textHash": "d51084343933b8bc43d33b16720951ab470a37c2ff0f0b4ecde2fa32633a52b7",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Vale is moving the original contract out with a courier. Eli's copy needs that signature record to survive scrutiny. Stop the runner before Vale can claim the evidence was fabricated. Intercept the contract courier before escape.",
+    "seconds": 16.18
+  },
+  {
+    "id": 42,
+    "part": "Outcome",
+    "file": "Outcome_42.wav",
+    "textHash": "b543c30ddafcdfbd7cfcc81826e777c19c5e1463fdfdfd392b1dfee2a56c577a",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The signature is Vale's. Mina now has enough proof to expose the entire operation.",
+    "seconds": 6.15
+  },
+  {
+    "id": 43,
+    "part": "Mission",
+    "file": "Mission_43.wav",
+    "textHash": "260156515656d245b7bf5491a95ac846bb1ce4367262c1226bf56c35a0bb03d4",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Vale's last field commander is covering Eli's transfer. Remove him and his counter-sniper. Mara will move only when both primary threats are down. Eliminate the transfer commander and his counter-sniper.",
+    "seconds": 14.62
+  },
+  {
+    "id": 43,
+    "part": "Outcome",
+    "file": "Outcome_43.wav",
+    "textHash": "1ade57fb7ce52304bb5583dd5f735d9129d3faa08552beecc6ca040d9637ca3c",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The transfer is stopped. Eli remains in the sector, waiting for a real rescue.",
+    "seconds": 5.32
+  },
+  {
+    "id": 44,
+    "part": "Mission",
+    "file": "Mission_44.wav",
+    "textHash": "500f096b5c4de3f91ad35f83433149126d2204b9c97af81b6191c7e775b48935",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. You have finally reached Eli. Move to him, hold your position to release him and cover his run to Mara's vehicle. After all the false routes, this one has to lead home. Release Eli and keep him alive until extraction.",
+    "seconds": 14.98
+  },
+  {
+    "id": 44,
+    "part": "Outcome",
+    "file": "Outcome_44.wav",
+    "textHash": "6c6ca140d2e05d0c81e12f8f1d1926090830a93fc842ad736ef28afd58e44312",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Eli reaches Mara. He gives Mina the master record of Glass Meridian.",
+    "seconds": 4.96
+  },
+  {
+    "id": 45,
+    "part": "Mission",
+    "file": "Mission_45.wav",
+    "textHash": "e50af4ae7ec3e72c8fabd837d5b88cb520fd7e2225b0b0a240f6e03f7bc4c01f",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. The master record references three independent backups. Recover each one and leave with the archive. Vale cannot bury the evidence if the team holds every version. Recover three archive backups and reach the exit.",
+    "seconds": 14.77
+  },
+  {
+    "id": 45,
+    "part": "Outcome",
+    "file": "Outcome_45.wav",
+    "textHash": "2febcdbfad0bab78144dc6f43c80368cba3017675a81d16374d7ac940026a7e4",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The archive is complete. Vale orders his last marksman, Eclipse, to stop the broadcast.",
+    "seconds": 6.07
+  },
+  {
+    "id": 46,
+    "part": "Mission",
+    "file": "Mission_46.wav",
+    "textHash": "09128cd0f31c992cc704566a84096dca56041fd984928f1e300427786e7adfc4",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Eclipse's spotters are searching for Mina's transmission point. Clear them without lockdown. A quiet approach gives her time to establish the public evidence feed. Clear the spotters without triggering the alarm.",
+    "seconds": 14.32
+  },
+  {
+    "id": 46,
+    "part": "Outcome",
+    "file": "Outcome_46.wav",
+    "textHash": "db8a7035b6e37bc24ae26475f5cb719a66a7267094440c40cf090c5e4317d583",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Mina establishes the feed. Vale must now silence the witnesses in public.",
+    "seconds": 5.41
+  },
+  {
+    "id": 47,
+    "part": "Mission",
+    "file": "Mission_47.wav",
+    "textHash": "337a1c8eb499bcd0d31c20c2f8c31f90323749613be3a0afe9b1aa0aceead386",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Mina is moving the archive to Mara's extraction vehicle while the feed remains live. Protect her through the route. Losing her now would let Vale tell the ending himself. Protect Mina until she reaches the extraction vehicle.",
+    "seconds": 15.79
+  },
+  {
+    "id": 47,
+    "part": "Outcome",
+    "file": "Outcome_47.wav",
+    "textHash": "751ff730f114b5489ae7b0a7bc7226ad73e15da6011763963c49c3ef318c5e70",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Mina gets out with the archive. The signed documents are now beyond Vale's control.",
+    "seconds": 5.81
+  },
+  {
+    "id": 48,
+    "part": "Mission",
+    "file": "Mission_48.wav",
+    "textHash": "0a83bb213fd1c91fe8febfb4920c99f84d0fe35e20e7863985c6ba02c6e52a2f",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Vale's remaining assault units close on your extraction sector. Hold through the waves and board the helicopter. Ghost stays on the radio; Eclipse is still watching the final route. Survive the final assault waves and board extraction.",
+    "seconds": 16.78
+  },
+  {
+    "id": 48,
+    "part": "Outcome",
+    "file": "Outcome_48.wav",
+    "textHash": "8bb646275c7eebd80c01c30ce854852d09fb95384528a53837e4197534d1ccad",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "The rescue team escapes. You stay for one last confrontation so Eclipse cannot hunt them again.",
+    "seconds": 6.34
+  },
+  {
+    "id": 49,
+    "part": "Mission",
+    "file": "Mission_49.wav",
+    "textHash": "412959fbb6ab8bf750a4118fe78edf78ca0b19364e8c50842dc9f3c960fafcfc",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Rook. Eclipse is Vale's last weapon against the witnesses. Defeat the marksman using everything you learned: short peeks, broken locks and patient shots. The evidence is already safe. Now make the route safe too. Defeat Eclipse in the final sniper duel.",
+    "seconds": 17.71
+  },
+  {
+    "id": 49,
+    "part": "Outcome",
+    "file": "Outcome_49.wav",
+    "textHash": "0f86277282b0bc83bd127c29f9802e5d869ed91158076b185f86dad656f1e2ad",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Eclipse falls. Vale's signed orders reach the public and his contract is exposed. Mina restores the routes, Mara brings the witnesses home, and Eli returns to the family. Rook's final report has only three words: 'The way is clear.'",
+    "seconds": 16.29
+  },
+  {
+    "id": 0,
+    "part": "Radio",
+    "file": "Radio_OpeningExit.wav",
+    "textHash": "eeff40310907012864581bb8420845ebc420b5d53404d6eec6f7085050033423",
+    "voice": "Kokoro-1.0 / Michael 65% + Fenrir 35%",
+    "speed": 0.95,
+    "text": "Scout confirmed. Patrols are responding. Move to the green beacon. Hold your ground.",
+    "seconds": 5.7
+  }
+]

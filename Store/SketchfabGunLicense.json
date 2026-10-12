@@ -1,0 +1,42 @@
+{
+  "title": "12 Low Poly Guns",
+  "source": "https://sketchfab.com/3d-models/12-low-poly-guns-d5f3f79b65b64390a42b0b61513017d7",
+  "creator": "Gintoki1234",
+  "license": {
+    "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+    "label": "CC Attribution",
+    "fullName": "Creative Commons Attribution",
+    "requirements": "Author must be credited. Commercial use is allowed.",
+    "url": "http://creativecommons.org/licenses/by/4.0/",
+    "slug": "by"
+  },
+  "downloaded": "2026-10-05",
+  "changes": "Five variants separated, transformed and scaled for Unity mobile gameplay.",
+  "models": [
+    {
+      "model": "M40Scout",
+      "triangles": 639,
+      "length": 1.12
+    },
+    {
+      "model": "SVDMarksman",
+      "triangles": 1330,
+      "length": 1.22
+    },
+    {
+      "model": "M16Assault",
+      "triangles": 856,
+      "length": 1.0
+    },
+    {
+      "model": "MP5Compact",
+      "triangles": 668,
+      "length": 0.68
+    },
+    {
+      "model": "EagleSidearm",
+      "triangles": 901,
+      "length": 0.3
+    }
+  ]
+}

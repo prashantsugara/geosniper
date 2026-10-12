@@ -15,7 +15,7 @@ public static class CampaignProgressionChecks
         readonly Dictionary<string,int?> saved=new Dictionary<string,int?>();
         public SavedProgress()
         {
-            var keys=new List<string>{"GeoSniper.Credits","GeoSniper.XP","GeoSniper.StageUnlocked","GeoSniper.ActiveNodeId","GeoSniper.DailyClaimed"};
+            var keys=new List<string>{"GeoSniper.Credits","GeoSniper.XP","GeoSniper.PlayerRank","GeoSniper.RankUpFrom","GeoSniper.RankUpTo","GeoSniper.StageUnlocked","GeoSniper.ActiveNodeId","GeoSniper.DailyClaimed"};
             keys.AddRange(CampaignNodeGraph.Nodes.Select(n=>"GeoSniper.NodeCompleted_"+n.id));
             foreach(string key in keys) {saved[key]=PlayerPrefs.HasKey(key)?(int?)PlayerPrefs.GetInt(key):null;PlayerPrefs.DeleteKey(key);}
         }
@@ -46,16 +46,14 @@ public static class CampaignProgressionChecks
             CampaignNodeGraph.CompleteNode(13);
             Require(!CampaignNodeGraph.IsNodeCompleted(13),"Completing locked node bypasses progression");
             CampaignNodeGraph.CompleteNode(0);
-            Require(CampaignNodeGraph.IsNodeUnlocked(1) && CampaignNodeGraph.IsNodeUnlocked(2) && !CampaignNodeGraph.IsNodeUnlocked(3),"Opening branch unlock incorrect");
-            CampaignNodeGraph.CompleteNode(2);
-            Require(CampaignNodeGraph.IsNodeUnlocked(4) && !CampaignNodeGraph.IsNodeUnlocked(3),"Branch unlock does not follow authored graph");
-            CampaignNodeGraph.CompleteNode(4);
-            Require(CampaignNodeGraph.IsNodeUnlocked(5),"Branch did not unlock convergence");
+            Require(CampaignNodeGraph.IsNodeUnlocked(1) && !CampaignNodeGraph.IsNodeUnlocked(2),"Story must unlock in narrative order");
+            for(int id=1;id<5;id++){Require(CampaignNodeGraph.IsNodeUnlocked(id),"Story chapter is unreachable");CampaignNodeGraph.CompleteNode(id);}
+            Require(CampaignNodeGraph.IsNodeUnlocked(5),"Story progression stalled");
             PlayerPrefs.SetInt("GeoSniper.NodeCompleted_11",1);
             Require(CampaignNodeGraph.IsNodeUnlocked(11) && CampaignNodeGraph.IsNodeUnlocked(12),"Existing saves lost completed branch");
             Require(PlayerPrefs.GetInt("GeoSniper.Credits",0)==0 && PlayerPrefs.GetInt("GeoSniper.XP",0)==0,"Progress API pays duplicate rewards");
             Require(CampaignNodeGraph.ForStage(1).contractType==CampaignContractType.Overwatch,"VIP node starts wrong mode");
-            Require(CampaignNodeGraph.ForStage(9).contractType==CampaignContractType.Stealth,"Stealth node starts wrong mode");
+            Require(CampaignNodeGraph.ForStage(3).contractType==CampaignContractType.Stealth,"Stealth node starts wrong mode");
             Require(CampaignNodeGraph.ForStage(49).contractType==CampaignContractType.TargetIdentification,"Finale starts wrong mode");
         }
     }
@@ -139,13 +137,22 @@ public static class CampaignProgressionChecks
                 reward.Invoke(mission,null);reward.Invoke(mission,null);
                 Require(PlayerPrefs.GetInt("GeoSniper.Credits")==200 && PlayerPrefs.GetInt("GeoSniper.XP")==100,"Campaign payout duplicated");
                 Require(CampaignNodeGraph.IsNodeCompleted(0),"Victory did not save progress");
+                Require(CampaignProgression.CreditsReward(CampaignNodeGraph.GetNode(0))==50 && CampaignProgression.XPReward(CampaignNodeGraph.GetNode(0))==25,"Replay preview does not match reduced payout");
                 int unlocked=PlayerPrefs.GetInt("GeoSniper.StageUnlocked");
+                typeof(UrbanCombatMission).GetField("stageRewarded",Private).SetValue(mission,false);
+                reward.Invoke(mission,null);reward.Invoke(mission,null);
+                Require(PlayerPrefs.GetInt("GeoSniper.Credits")==250 && PlayerPrefs.GetInt("GeoSniper.XP")==125,"Replay payout not reduced or paid twice");
+                var configure=typeof(UrbanCombatMission).GetMethod("ConfigureCampaign",Private);
+                configure.Invoke(mission,new object[]{CampaignNodeGraph.GetNode(0)});
+                typeof(UrbanCombatMission).GetMethod("TriggerAccolade",Private).Invoke(mission,new object[]{"TEST","HEADSHOT +200 XP",200});
+                Require(PlayerPrefs.GetInt("GeoSniper.XP")==175,"Replay kill bonuses bypass XP reduction");
+                Require((string)typeof(UrbanCombatMission).GetField("accoladeSubtitle",Private).GetValue(mission)=="HEADSHOT +50 XP","Replay accolade displays full XP");
                 typeof(UrbanCombatMission).GetField("stageRewarded",Private).SetValue(mission,false);
                 typeof(UrbanCombatMission).GetField("campaignNode",Private).SetValue(mission,null);
                 PlayerPrefs.SetInt("GeoSniper.ActiveNodeId",13);
                 mission.isPvPDuel=true;
                 reward.Invoke(mission,null);
-                Require(PlayerPrefs.GetInt("GeoSniper.Credits")==700 && PlayerPrefs.GetInt("GeoSniper.XP")==200,"Standalone duel used stale campaign rewards");
+                Require(PlayerPrefs.GetInt("GeoSniper.Credits")==750 && PlayerPrefs.GetInt("GeoSniper.XP")==275,"Standalone duel used stale campaign rewards");
                 Require(!CampaignNodeGraph.IsNodeCompleted(13) && PlayerPrefs.GetInt("GeoSniper.StageUnlocked")==unlocked,"Standalone duel advances campaign");
             }
             finally {Object.DestroyImmediate(go);}

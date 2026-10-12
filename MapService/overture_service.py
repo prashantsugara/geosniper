@@ -121,7 +121,10 @@ def convert(rows, lat, lon):
             parts = [geometry] if geometry.geom_type == "LineString" else list(getattr(geometry, "geoms", []))
         elif kind == "building":
             tags["building"] = "yes"
-            tags["height"] = props.get("height") or 12
+            if props.get("height"):
+                tags["height"] = props["height"]
+            elif props.get("num_floors"):
+                tags["building:levels"] = props["num_floors"]
             parts = [geometry] if geometry.geom_type == "Polygon" else list(getattr(geometry, "geoms", []))
         else:
             if props.get("operating_status") == "permanently_closed" or geometry.geom_type != "Point":

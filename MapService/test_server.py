@@ -12,6 +12,23 @@ def sample():
     return {"version": 2, "features": [{"kind": "road", "height": 0, "points": [[-100, 0], [100, 0]]}]}
 
 class Checks(unittest.TestCase):
+    def test_building_height_sources_and_stable_estimates(self):
+        raw = {"elements": [{"tags": {"highway": "residential"}, "geometry": [{"lat": 0, "lon": -.002}, {"lat": 0, "lon": .002}]}]}
+        for index, tags in enumerate(({"height": "150"}, {"building:levels": "7"}, {}, {})):
+            x = index * .0003
+            geometry = [{"lat": z, "lon": xx} for xx, z in ((x, 0), (x+.0002, 0), (x+.0002, .0002), (x, .0002), (x, 0))]
+            raw["elements"].append({"tags": {"building": "yes", "name": str(index), **tags}, "geometry": geometry})
+        result = normalize(raw, 0, 0)
+        buildings = {f["name"]: f for f in result["features"] if f["kind"] == "building"}
+        self.assertEqual(buildings["0"]["height"], 150)
+        self.assertEqual(buildings["0"]["details"]["height_source"], "provided")
+        self.assertEqual(buildings["1"]["height"], 21)
+        self.assertEqual(buildings["1"]["details"]["height_source"], "floors")
+        for name in ("2", "3"):
+            self.assertEqual(buildings[name]["details"]["height_source"], "estimated")
+            self.assertTrue(6 <= buildings[name]["height"] <= 24)
+        self.assertEqual(result, normalize(raw, 0, 0))
+
     def setUp(self):
         # Avoid restrictive mkdtemp ACLs in Windows sandbox test runs.
         directory = Path(__file__).parent / ("test-cache-" + uuid.uuid4().hex)

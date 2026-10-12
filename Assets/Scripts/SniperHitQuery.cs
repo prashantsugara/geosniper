@@ -25,6 +25,12 @@ namespace GeoSniper
                 if(enemy!=null && enemy.gameObject.activeInHierarchy && enemy.Actor!=null && !enemy.Actor.IsDead) targets.Add(enemy.Actor);
             foreach(var civilian in CivilianBot.AllBots)
                 if(civilian!=null && civilian.gameObject.activeInHierarchy && civilian.Actor!=null && !civilian.Actor.IsDead) targets.Add(civilian.Actor);
+            var rival = GeoSniper.Duel.SniperDuelManager.ActiveOpponent;
+            if (rival != null && rival.gameObject.activeInHierarchy && !rival.IsDead)
+            {
+                var actor = rival.GetComponent<CombatActor>();
+                if (actor != null) targets.Add(actor);
+            }
             int version=++queryVersion;
             try
             {

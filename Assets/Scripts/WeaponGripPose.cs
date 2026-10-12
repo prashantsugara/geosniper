@@ -46,7 +46,7 @@ namespace GeoSniper
         }
 
         // Analytic two-bone solve: preserves bone lengths and the authored elbow bend plane.
-        public static void SolveArm(Transform hand,Vector3 palmLocal,Vector3 target,Quaternion rotation,Vector3 bendHint)
+        public static void SolveArm(Transform hand,Vector3 palmLocal,Vector3 target,Quaternion rotation,Vector3 bendHint,bool stableBend=false)
         {
             if(hand==null || hand.parent==null || hand.parent.parent==null) return;
             Transform elbow=hand.parent, shoulder=elbow.parent;
@@ -58,7 +58,7 @@ namespace GeoSniper
             float length=Mathf.Clamp(delta.magnitude,Mathf.Abs(upper-lower)+.0001f,upper+lower-.0001f);
             if(delta.sqrMagnitude<.000001f) return;
             Vector3 direction=delta.normalized;
-            Vector3 bend=Vector3.ProjectOnPlane(elbow.position-origin,direction);
+            Vector3 bend=Vector3.ProjectOnPlane(stableBend?bendHint:elbow.position-origin,direction);
             if(bend.sqrMagnitude<.00001f) bend=Vector3.ProjectOnPlane(bendHint,direction);
             if(bend.sqrMagnitude<.00001f) bend=Vector3.Cross(direction,Vector3.right);
             bend.Normalize();

@@ -23,6 +23,7 @@ namespace GeoSniper
         Vector3 searchAnchor, searchProbe;
         bool hasSearchProbe;
         Quaternion searchFacing;
+        float searchLookTime,searchLookYaw;int searchProbes;
         AIState lastUpdatedState;
         readonly RaycastHit[] coverPathHits=new RaycastHit[16];
         int combatStrafeSign=1;
@@ -67,7 +68,7 @@ namespace GeoSniper
         Vector3 coverRestPos, coverPeekPos;
         bool returningToCover;
         public bool IsCrouchingInCover => currentState == AIState.TakeCover && coverSubState == CoverSubState.Crouching;
-        public bool IsCrouched => currentState == AIState.TakeCover && coverSubState == CoverSubState.Crouching;
+        public bool IsCrouched => RecoveringWeapon || currentState == AIState.TakeCover && coverSubState == CoverSubState.Crouching;
         public bool IsSprinting => currentState == AIState.TakeCover && coverSubState == CoverSubState.Sprinting;
         public bool IsAiming => !isDisarmed && !IsReloading && player != null && (currentState == AIState.Combat || (currentState == AIState.TakeCover && coverSubState == CoverSubState.Peeking) || isCounterSniper);
         const int MagazineCapacity=18;
@@ -159,6 +160,7 @@ namespace GeoSniper
         
         public bool Suspended;
         public bool ObservationPatrol;
+        public bool PassiveTrainingTarget;
         public float CurrentSpeed { get; private set; }
         public CombatActor Actor => actor;
         public float tagDurationTimer;
@@ -206,6 +208,7 @@ namespace GeoSniper
         public void Initialize(Transform target,int index)
         {
             player=target; patrolIndex=index;
+            preferredCombatSide=Random.value<.5f?-1f:1f;combatTemperament=Random.value;
             speed = Random.Range(2.0f, 2.7f);
             patrolRadius = Random.Range(8f, 16f);
             patrolAnchor=transform.position;
@@ -268,74 +271,36 @@ namespace GeoSniper
         }
         void OnDisable()
         {
+            burstGeneration++;
+            CancelSniperLock();
+            if (shotLine != null) shotLine.enabled = false;
             BallisticsSystem.OnShotNoise -= HearGunshot;
             if (actor != null) actor.OnDamaged -= OnTakeDamage;
             if (ActiveAimingCounterSniper == this) ActiveAimingCounterSniper = null;
             AllBots.Remove(this);
         }
         
-        public static void NotifyMissedShot(Vector3 muzzle, Vector3 impactPoint)
+        public static void NotifyMissedShot(Vector3 start, Vector3 end, bool actualImpact = true)
         {
-            Vector3 rayDir = impactPoint - muzzle;
-            float rayLen = rayDir.magnitude;
-            if (rayLen > 0.001f) rayDir /= rayLen;
-
-            for (int i = 0; i < AllBots.Count; i++)
+            if (!FinitePoint(start) || !FinitePoint(end)) return;
+            foreach (var bot in AllBots)
             {
-                var bot = AllBots[i];
                 if (bot == null || bot.actor == null || bot.actor.IsDead || bot.Suspended) continue;
-
-                Vector3 botPos = bot.transform.position;
-                float distToImpact = Vector3.Distance(botPos, impactPoint);
-
-                float distToTraj = float.MaxValue;
-                float proj = Vector3.Dot(botPos - muzzle, rayDir);
-                if (proj > 0f && proj < rayLen)
+                Vector3 chest = bot.transform.position + Vector3.up * (bot.IsCrouched ? .65f : 1.1f);
+                float pass = EnemyReactionPolicy.FlightDistance(chest.x,chest.y,chest.z,start.x,start.y,start.z,end.x,end.y,end.z);
+                if (pass <= EnemyReactionPolicy.NearPassRadius)
                 {
-                    Vector3 closestOnRay = muzzle + rayDir * proj;
-                    distToTraj = Vector3.Distance(botPos, closestOnRay);
+                    Vector3 segment = end-start;
+                    Vector3 closest = start + segment * Mathf.Clamp01(Vector3.Dot(chest-start,segment) / Mathf.Max(.0001f,segment.sqrMagnitude));
+                    if (!bot.SourceVisible(closest)) pass=float.MaxValue;
                 }
-
-                if (distToImpact < 28f || distToTraj < 14f)
-                {
-                    PlayRadioChirpAt(botPos);
-                    bool needsCover=bot.currentState!=AIState.TakeCover || (bot.suspiciousLocation-muzzle).sqrMagnitude>36f;
-                    bot.detectionProgress = 1.0f;
-                    bot.suspiciousLocation = muzzle;
-                    bot.lastSeenPosition = muzzle;
-                    bot.lostSightTime=0;
-                    bot.provokedUntil = Time.time + 18f;
-                    bot.stateTimer = 10f;
-                    bot.currentState = AIState.TakeCover;
-                    if(needsCover) bot.ChooseCoverTarget(muzzle - botPos);
-                    bot.coverTimer = Mathf.Min(bot.coverTimer, 1.8f);
-                    bot.fireCooldown = Mathf.Min(bot.fireCooldown, 1.2f);
-                    bot.TriggerBark("SNIPER FIRE! TAKE COVER!", 3.0f);
-
-                    Vector3 faceDir = muzzle - botPos; faceDir.y = 0;
-                    if (faceDir.sqrMagnitude > 0.01f)
-                        bot.transform.rotation = Quaternion.LookRotation(faceDir);
-
-                    // High-intensity near-miss suppression (bullet passes <= 3.8m or strikes <= 4.2m)
-                    if (distToTraj < 3.8f || distToImpact < 4.2f)
-                    {
-                        bot.suppressionTimer = Random.Range(1.4f, 2.2f);
-                        bot.TriggerBark("SNIPER! SPRINT TO COVER!", 3.2f);
-                    }
-                }
-                else if (distToImpact < 45f)
-                {
-                    // Audible impact thud nearby causes alert suspicion without mission-fail alarms
-                    bot.detectionProgress = Mathf.Max(bot.detectionProgress, 0.65f);
-                    bot.suspiciousLocation = impactPoint;
-                    bot.stateTimer = 6f;
-                    bot.currentState = AIState.Suspicious;
-                    bot.TriggerBark("INCOMING ROUND!", 2.2f);
-
-                    Vector3 faceDir = impactPoint - botPos; faceDir.y = 0;
-                    if (faceDir.sqrMagnitude > 0.01f)
-                        bot.transform.rotation = Quaternion.LookRotation(faceDir);
-                }
+                float impact = actualImpact ? Vector3.Distance(chest, end) : float.MaxValue;
+                bool audible = actualImpact && bot.ImpactVisible(end);
+                // A wall shielding this guard blocks the impact reaction; the finite flight segment ends at that wall.
+                var reaction = EnemyReactionPolicy.ClassifyShotThreat(pass, audible ? impact : float.MaxValue, audible);
+                if (reaction != EnemyThreatReaction.None)
+                    bot.ReactToShotThreat(reaction == EnemyThreatReaction.Investigate ? end : start,
+                        reaction == EnemyThreatReaction.TakeCover, pass <= EnemyReactionPolicy.NearPassRadius);
             }
         }
 
@@ -358,9 +323,10 @@ namespace GeoSniper
             float alertRadius = 35f;
             foreach (var bot in AllBots)
             {
-                if (bot == null || bot == this || bot.actor == null || bot.actor.IsDead || bot.Suspended || bot.Alerts != Alerts) continue;
+                if (bot == null || bot == this || bot.actor == null || bot.actor.IsDead || bot.Suspended || bot.PassiveTrainingTarget || bot.Alerts != Alerts) continue;
                 float d = Vector3.Distance(bot.transform.position, casualtyPos);
                 if (d > alertRadius) continue;
+                bot.ObservationPatrol=false;
 
                 bot.detectionProgress = 1f;
                 bot.suspiciousLocation = threatPos;
@@ -374,7 +340,7 @@ namespace GeoSniper
 
                 Vector3 faceDir = threatPos - bot.transform.position; faceDir.y = 0;
                 if (faceDir.sqrMagnitude > 0.01f)
-                    bot.transform.rotation = Quaternion.LookRotation(faceDir);
+                    bot.transform.rotation = Quaternion.RotateTowards(bot.transform.rotation, Quaternion.LookRotation(faceDir), 25f);
             }
         }
 
@@ -385,8 +351,9 @@ namespace GeoSniper
             float maxDist = (level == AIState.Combat) ? 120f : 80f;
             foreach (var bot in AllBots)
             {
-                if (bot == null || bot.actor==null || bot.actor.IsDead || bot.Suspended || bot.Alerts!=Alerts || bot.currentState == AIState.Combat) continue;
+                if (bot == null || bot.actor==null || bot.actor.IsDead || bot.Suspended || bot.PassiveTrainingTarget || bot.Alerts!=Alerts || bot.currentState == AIState.Combat) continue;
                 if (Vector3.Distance(bot.transform.position, location) > maxDist) continue;
+                bot.ObservationPatrol=false;
                 bot.currentState = level;
                 bot.suspiciousLocation = location;
                 bot.lastSeenPosition = location;
@@ -397,7 +364,7 @@ namespace GeoSniper
             }
         }
 
-        public float StaggerProgress => staggerTimer > 0 ? staggerTimer / 0.35f : 0f;
+        public float StaggerProgress => staggerTimer > 0 ? Mathf.Clamp01(staggerTimer / Mathf.Max(.01f, staggerDuration)) : 0f;
         public Vector3 FlinchDirection { get; private set; }
 
         public void Disarm()
@@ -429,6 +396,7 @@ namespace GeoSniper
                 var anchor = gun.GetComponent<EnemyWeaponAnchor>();
                 if (anchor != null) anchor.enabled = false;
                 weaponMuzzle = null;
+                droppedWeapon=gun;droppedWeaponParent=gun.parent;droppedLocalPosition=gun.localPosition;droppedLocalRotation=gun.localRotation;disarmedAt=Time.time;weaponPickupHold=0;
                 gun.SetParent(null, true);
                 var rb = gun.gameObject.GetComponent<Rigidbody>();
                 if (rb == null) rb = gun.gameObject.AddComponent<Rigidbody>();
@@ -436,6 +404,7 @@ namespace GeoSniper
                 rb.interpolation = RigidbodyInterpolation.Interpolate;
                 rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
                 var col = gun.gameObject.GetComponent<Collider>();
+                droppedColliderAdded=col==null;droppedColliderWasEnabled=col!=null && col.enabled;
                 if (col == null)
                 {
                     var box = gun.gameObject.AddComponent<BoxCollider>();
@@ -447,12 +416,13 @@ namespace GeoSniper
                 col.enabled = true;
                 rb.AddForce(transform.forward * 2.2f + Vector3.up * 2.5f + Random.insideUnitSphere * 0.4f, ForceMode.Impulse);
                 rb.AddTorque(Random.insideUnitSphere * 10f, ForceMode.Impulse);
-                if (Application.isPlaying) Destroy(gun.gameObject, 15f);
+                // Keep the physical rifle available for a safe recovery attempt.
                 gun = null;
             }
 
-            staggerTimer = 0.55f;
-            FlinchDirection = player != null ? (transform.position - player.position).normalized : -transform.forward;
+            burstGeneration++;CancelSniperLock();ResetPlayerTactics();
+            SetStagger(.55f);
+            FlinchDirection = (transform.position - lastSeenPosition).sqrMagnitude > .01f ? (transform.position - lastSeenPosition).normalized : -transform.forward;
             currentState = AIState.TakeCover;
             stateTimer = 12f;
             Vector3 threatPos = lastSeenPosition;
@@ -463,14 +433,13 @@ namespace GeoSniper
         {
             if (isHobbled || actor == null || actor.IsDead) return;
             isHobbled = true;
-            speed *= 0.45f;
+            speed = Mathf.Max(speed,2.6f)*.45f;
             if (navigationAgent != null && navigationAgent.isOnNavMesh)
             {
                 navigationAgent.speed = speed;
             }
-            staggerTimer = 0.7f;
-            FlinchDirection = Vector3.down * 0.5f + (player != null ? (transform.position - player.position).normalized * 0.5f : -transform.forward * 0.5f);
-            coverSubState = CoverSubState.Crouching;
+            SetStagger(.7f);
+            FlinchDirection = Vector3.down * 0.5f + ((transform.position - lastSeenPosition).sqrMagnitude > .01f ? (transform.position - lastSeenPosition).normalized * .5f : -transform.forward * .5f);
             stateTimer = 10f;
         }
 
@@ -479,11 +448,11 @@ namespace GeoSniper
             if (actor == null || actor.IsDead) return;
 
             string part = info.bodyPart != null ? info.bodyPart.ToLowerInvariant() : "";
-            if (part.Contains("arm") || part.Contains("hand"))
+            if (info.TotalDamage >= 25f && (part.Contains("arm") || part.Contains("hand")))
             {
                 Disarm();
             }
-            else if (part.Contains("leg") || part.Contains("foot"))
+            else if (info.TotalDamage >= 25f && (part.Contains("leg") || part.Contains("foot")))
             {
                 Hobble();
             }
@@ -491,64 +460,71 @@ namespace GeoSniper
 
         void OnTakeDamage(float damage)
         {
-            if (actor == null || actor.IsDead || Suspended) return;
-            detectionProgress = 1f;
-            if(player!=null) { lastSeenPosition=player.position; lostSightTime=0; provokedUntil=Time.time+18f; }
-            staggerTimer = 0.35f;
-            FlinchDirection = player != null ? (transform.position - player.position).normalized : -transform.forward;
-            
-            bool needsCover=currentState!=AIState.TakeCover;
-            currentState = AIState.TakeCover;
-            stateTimer = 8f;
-            Vector3 threatPos = lastSeenPosition;
-            if(needsCover) ChooseCoverTarget(threatPos - transform.position);
-            fireCooldown = Mathf.Min(fireCooldown, 1.2f);
-            
-            Vector3 faceDir = threatPos - transform.position; faceDir.y = 0;
-            if (faceDir.sqrMagnitude > 0.01f)
-                transform.rotation = Quaternion.LookRotation(faceDir);
-
-            AlertNearbyTeammates(threatPos, transform.position);
+            if (actor == null || actor.IsDead || Suspended || !float.IsFinite(damage) || damage <= 0) return;
+            if(!PassiveTrainingTarget)ObservationPatrol=false;
+            Vector3 source = actor.LastDamageSourcePos;
+            if (!FinitePoint(source) || (source - transform.position).sqrMagnitude < 1f)
+                source = playerVisible && player != null && SourceVisible(player.position + Vector3.up * 1.1f) ? player.position : lastSeenPosition;
+            bool visibleNow=player!=null && !(player.GetComponent<CombatActor>()?.IsDead ?? false) && SourceVisible(player.position+Vector3.up*((player.GetComponent<UrbanPlayer>()?.IsCrouching??false)?.85f:1.1f));
+            playerVisible=visibleNow;
+            underFireUntil=Time.time+3f;
+            Vector3 threat = EstimateThreat(source);
+            if (playerVisible && player != null && SourceVisible(player.position + Vector3.up * 1.1f)) threat = player.position;
+            lastSeenPosition = suspiciousLocation = threat;
+            detectionProgress = Mathf.Max(detectionProgress, .85f);
+            provokedUntil = Time.time + 18f;
+            SetStagger(Mathf.Clamp(damage / 180f, .16f, .36f));
+            HitReactionStrength = Mathf.Clamp(.45f + damage / 120f, .45f, 1f);
+            FlinchDirection = (transform.position - source).normalized;
+            HitReactionSide = Vector3.Dot(transform.right, FlinchDirection) >= 0 ? 1 : -1;
+            acquisitionRemaining = Mathf.Max(acquisitionRemaining, staggerTimer + .15f * ReactionScale);
+            nextVisionCheck = 0; CancelSniperLock();
+            ResetPlayerTactics();
+            bool needsCover = currentState != AIState.TakeCover;
+            bool defend= !playerVisible || actor.Health<=actor.maxHealth*.55f || isDisarmed || isHobbled
+                || IsReloading || currentState==AIState.TakeCover || isCounterSniper;
+            if(defend)
+            {
+                currentState = AIState.TakeCover; stateTimer = Random.Range(5f,9f);
+                if (needsCover && !isCounterSniper && !isFugitiveRunner) ChooseCoverTarget(threat - transform.position);
+            }
+            else
+            {
+                // An exposed but healthy guard changes angle and returns fire after the flinch.
+                // Wounded, disarmed and suppressed guards still prioritise shelter.
+                currentState=AIState.Combat;combatPause=staggerTimer;combatTargetReady=false;
+                preferredCombatSide=Random.value<.5f?-1f:1f;
+                fireCooldown=Mathf.Min(fireCooldown,staggerTimer+.2f*ReactionScale);
+            }
+            if (coverSubState == CoverSubState.Peeking) { coverSubState = CoverSubState.Crouching; returningToCover = true; }
+            fireCooldown = Mathf.Max(fireCooldown, staggerTimer + .25f);
+            AlertNearbyTeammates(threat, transform.position);
         }
 
         void HearGunshot(Vector3 source, float radius)
         {
-            if (actor == null || actor.IsDead || Suspended || currentState == AIState.Combat) return;
-            float dist = Vector3.Distance(transform.position, source);
-            if (dist < Mathf.Min(detectionRange * 2.8f, radius))
-            {
-                bool needsCover=currentState!=AIState.TakeCover || (suspiciousLocation-source).sqrMagnitude>36f;
-                suspiciousLocation = source;
-                lastSeenPosition = source;
-                lostSightTime=0;
-                provokedUntil = Time.time + 18f;
-                stateTimer = 8f;
-                Vector3 aimDir = source - transform.position; aimDir.y = 0;
-                if (aimDir.sqrMagnitude > 0.01f)
-                    transform.rotation = Quaternion.LookRotation(aimDir);
-
-                if (dist < 110f)
-                {
-                    detectionProgress = Mathf.Max(detectionProgress, 0.95f);
-                    currentState = AIState.TakeCover;
-                    if(needsCover) ChooseCoverTarget(source - transform.position);
-                    coverTimer = Mathf.Min(coverTimer, 1.8f);
-                    fireCooldown = Mathf.Min(fireCooldown, 1.2f);
-                }
-                else
-                {
-                    detectionProgress = Mathf.Max(detectionProgress, 0.95f);
-                    currentState = AIState.Suspicious;
-                }
-            }
+            if (actor == null || actor.IsDead || Suspended || !FinitePoint(source)) return;
+            float distance = Vector3.Distance(transform.position, source);
+            bool sourceVisible = SourceVisible(source);
+            // Solid cover muffles the sound; hearing alone never grants visual targeting.
+            float audibleRadius = Mathf.Min(detectionRange * 2.8f, radius) * (sourceVisible ? 1f : .45f);
+            var reaction = EnemyReactionPolicy.ClassifyGunshot(distance, audibleRadius, sourceVisible && playerVisible);
+            if (reaction != EnemyThreatReaction.None)
+                ReactToShotThreat(source, reaction == EnemyThreatReaction.TakeCover, false);
         }
-        
+
         void Update()
         {
             if (tagDurationTimer > 0f) tagDurationTimer -= Time.deltaTime;
             if(actor==null || actor.IsDead || player==null || Suspended) { CurrentSpeed=0; lastPosition=transform.position; return; }
+            TickReaction(Time.deltaTime);
             TickReload(Time.deltaTime);
-            if(ObservationPatrol) {currentState=AIState.Patrol;UpdatePatrol();return;}
+            if(ObservationPatrol)
+            {
+                if(PassiveTrainingTarget || !ClosePlayerVisible(12f))
+                {currentState=AIState.Patrol;UpdatePatrol();return;}
+                ObservationPatrol=false;
+            }
             
             if (staggerTimer > 0)
             {
@@ -557,6 +533,8 @@ namespace GeoSniper
                 lastPosition = transform.position;
                 return; // skip movement and firing while staggered
             }
+
+            if(isDisarmed && !isFugitiveRunner){UpdateDisarmed(Time.deltaTime);return;}
 
             if (isFugitiveRunner)
             {
@@ -594,7 +572,7 @@ namespace GeoSniper
                 return;
             }
 
-            if (isVipAttacker && targetVIP != null && targetVIP.Actor != null && !targetVIP.Actor.IsDead)
+            if (isVipAttacker && targetVIP != null && targetVIP.Actor != null && !targetVIP.Actor.IsDead && !ClosePlayerVisible(18f))
             {
                 UpdateVipAttack();
                 return;
@@ -603,16 +581,21 @@ namespace GeoSniper
             Vector3 delta=player.position-transform.position; float d=delta.magnitude;
             var urbanPlayer = player.GetComponent<UrbanPlayer>();
             bool isCrouching = urbanPlayer != null && urbanPlayer.IsCrouching;
-            Vector3 eyes=transform.position+Vector3.up*1.65f, target=player.position+Vector3.up*(isCrouching ? 0.85f : 1.55f);
+            Vector3 eyes=transform.position+Vector3.up*(IsCrouched ? .95f : 1.65f), target=player.position+Vector3.up*(isCrouching ? 0.85f : 1.55f);
             
             float visionRange=Time.time<provokedUntil?Mathf.Max(detectionRange,150f):detectionRange;
-            if(Time.time>=nextVisionCheck)
+            if(d<=8f || Time.time>=nextVisionCheck)
             {
-                cachedVisibility=d<visionRange && (!Physics.Linecast(eyes,target,out var hit,~0,QueryTriggerInteraction.Ignore) || hit.transform==player || hit.transform.IsChildOf(player));
+                cachedVisibility=d<visionRange && (EnemyCoverGeometry.ClearShot(eyes,target,transform,player,coverPathHits)
+                    || EnemyCoverGeometry.ClearShot(eyes,player.position+Vector3.up*(isCrouching?.6f:1.1f),transform,player,coverPathHits));
                 nextVisionCheck=Time.time+.12f+(patrolIndex&3)*.01f;
             }
             bool visible=d<visionRange && cachedVisibility;
 
+            float viewAngle = currentState == AIState.Combat || currentState == AIState.TakeCover || isCounterSniper ? 110f : 70f;
+            Vector3 flatView=delta;flatView.y=0;
+            if (visible && d>2.5f && Vector3.Angle(transform.forward, flatView) > viewAngle) visible = false;
+            UpdateAimKnowledge(visible, target, d, Time.deltaTime);
             if (isCounterSniper)
             {
                 playerVisible=visible;
@@ -622,7 +605,7 @@ namespace GeoSniper
             }
 
             // Vision cone check (140 degrees)
-            if (visible && currentState!=AIState.Combat && currentState!=AIState.TakeCover && Vector3.Angle(transform.forward, delta) > 70f) visible = false;
+
             playerVisible=visible;
             if(visible) {lastSeenPosition=player.position;lostSightTime=0;}
             else lostSightTime+=Time.deltaTime;
@@ -632,7 +615,7 @@ namespace GeoSniper
             if (visible && currentState != AIState.Combat && currentState != AIState.TakeCover)
             {
                 float previousDetection=detectionProgress;
-                detectionProgress=EnemyAwarenessPolicy.Detection(detectionProgress,true,d/visionRange,isCrouching,Difficulty!=null?Difficulty.detectionSpeed:1f,Time.deltaTime);
+                detectionProgress=EnemyAwarenessPolicy.Detection(detectionProgress,true,d/visionRange,isCrouching,Difficulty!=null?Difficulty.detectionSpeed:1f,Time.deltaTime,d);
                 if(previousDetection<.35f && detectionProgress>=.35f && currentState!=AIState.Suspicious)
                 {
                     currentState=AIState.Suspicious;
@@ -646,7 +629,8 @@ namespace GeoSniper
                 {
                     currentState = AIState.Combat;
                     combatTargetReady=false;
-                    combatPause=1.2f*ReactionScale;
+                    combatPause=Random.Range(.12f,.32f)*ReactionScale;
+                    fireCooldown=Mathf.Min(fireCooldown,acquisitionRemaining+Random.Range(.12f,.3f)*ReactionScale);
                     BroadcastRadioAlert(lastSeenPosition, AIState.Combat);
                 }
             }
@@ -709,23 +693,17 @@ namespace GeoSniper
                 Vector3 targetLocalPos = (isCrouched && !hasArmyAnim) ? visualRestLocalPos + Vector3.down * 0.55f : visualRestLocalPos;
                 visualRoot.localPosition = Vector3.Lerp(visualRoot.localPosition, targetLocalPos, Time.deltaTime * 8f);
             }
-            if (BarkTimer > 0f) BarkTimer -= Time.deltaTime;
 
-            // Fade muzzle flash
-            if(muzzleFlash!=null && muzzleFlashTimer>0)
-            {
-                muzzleFlashTimer-=Time.deltaTime;
-                muzzleFlash.intensity=Mathf.Lerp(0,3.5f,Mathf.Max(0,muzzleFlashTimer)/.06f);
-            }
         }
         
-        void MoveTowards(Vector3 targetPos, float moveSpeedMultiplier = 1f)
+        void MoveTowards(Vector3 targetPos, float moveSpeedMultiplier = 1f, bool faceMovement = true)
         {
             moveSpeedMultiplier*=SpeedScale;
+            float locomotionSpeed=ResponsiveMoveSpeed;
             if(navigationAgent!=null && navigationAgent.isOnNavMesh)
             {
                 navigationAgent.nextPosition = transform.position;
-                navigationAgent.speed=speed*moveSpeedMultiplier;
+                navigationAgent.speed=locomotionSpeed*moveSpeedMultiplier;
                 bool moving=moveSpeedMultiplier>.01f && (targetPos-transform.position).sqrMagnitude>.25f;
                 if(!moving)
                 {
@@ -748,7 +726,7 @@ namespace GeoSniper
                 }
             }
             Vector3 direction = targetPos - transform.position; direction.y = 0;
-            if (direction.sqrMagnitude > 0.01f)
+            if (faceMovement && direction.sqrMagnitude > 0.01f)
             {
                 Quaternion targetRot = Quaternion.LookRotation(direction);
                 transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * 6f);
@@ -757,8 +735,8 @@ namespace GeoSniper
             Vector3 move = Vector3.zero;
             if (direction.magnitude > 0.5f)
             {
-                float alignment = Mathf.Clamp01(Vector3.Dot(transform.forward, direction.normalized) + 0.3f);
-                move = transform.forward * speed * moveSpeedMultiplier * alignment;
+                float alignment = faceMovement ? Mathf.Clamp01(Vector3.Dot(transform.forward, direction.normalized) + 0.3f) : 1f;
+                move = (faceMovement ? transform.forward : direction.normalized) * locomotionSpeed * moveSpeedMultiplier * alignment;
             }
             
             bool unsafeStep=move.sqrMagnitude>0 && !SafeStep(transform.position+move.normalized*.8f);
@@ -770,6 +748,7 @@ namespace GeoSniper
                 else if (SafeStep(transform.position + detour2.normalized * .8f)) move = detour2 * 0.85f;
                 else move = Vector3.zero;
             }
+            if (body == null || !body.enabled) return;
             vertical=body.isGrounded?-2:Mathf.Max(-30,vertical-18*Time.deltaTime);
             body.Move((move+Vector3.up*vertical)*Time.deltaTime);
             
@@ -823,7 +802,7 @@ namespace GeoSniper
         {
             CheckPatrolChatter();
             patrolTime -= Time.deltaTime;
-            float speedMult = Alerts.Level > 0 ? 0.65f : 0.45f;
+            float speedMult = Alerts.Level > 0 ? .9f : .65f;
             MoveTowards(patrolTarget, speedMult);
             if (Vector3.Distance(transform.position, patrolTarget) < 1f || blockedTime > 1.2f || patrolTime<=0)
             {
@@ -847,12 +826,12 @@ namespace GeoSniper
             if(!searching)
             {
                 stateTimer-=Time.deltaTime;
-                MoveTowards(suspiciousLocation,.65f);
+                MoveTowards(suspiciousLocation,.85f);
                 if(Vector3.Distance(transform.position,suspiciousLocation)>2f && blockedTime<=1.2f && stateTimer>0) return;
                 blockedTime=0;
                 searching=true;
                 searchAnchor=suspiciousLocation;
-                searchFacing=transform.rotation;
+                searchFacing=transform.rotation;searchLookTime=0;searchProbes=0;
                 searchTime=EnemyAwarenessPolicy.SearchDuration;
                 hasSearchProbe=TryChooseSearchProbe(out searchProbe);
                 TriggerBark("LOST VISUAL. SEARCHING.",2.5f);
@@ -865,8 +844,11 @@ namespace GeoSniper
                 return;
             }
             MoveTowards(transform.position,0);
-            float sweep=Mathf.Sin((EnemyAwarenessPolicy.SearchDuration-searchTime)*1.8f)*65f;
-            transform.rotation=Quaternion.RotateTowards(transform.rotation,searchFacing*Quaternion.Euler(0,sweep,0),Time.deltaTime*95f);
+            searchLookTime-=Time.deltaTime;
+            if(searchLookTime<=0){searchLookTime=Random.Range(.55f,1.2f);searchLookYaw=Random.Range(-75f,75f);}
+            transform.rotation=Quaternion.RotateTowards(transform.rotation,searchFacing*Quaternion.Euler(0,searchLookYaw,0),Time.deltaTime*95f);
+            if(hasSearchProbe && searchProbes<2 && searchTime>2 && (Vector3.Distance(transform.position,searchProbe)<=1 || blockedTime>=.6f))
+            {searchProbes++;blockedTime=0;hasSearchProbe=TryChooseSearchProbe(out searchProbe);}
             if(searchTime<=0)
             {
                 searching=false;
@@ -884,11 +866,12 @@ namespace GeoSniper
             forward.y=0f;
             if(forward.sqrMagnitude<.01f)forward=transform.forward;
             forward.Normalize();
-            float side=(patrolIndex++&1)==0?1f:-1f;
+            float side=Random.value<.5f?-1f:1f;
             for(int i=0;i<4;i++)
             {
-                Vector3 direction=Quaternion.Euler(0f,side*(55f+i*35f),0f)*forward;
-                Vector3 candidate=transform.position+direction*3f;
+                Vector3 direction=Quaternion.Euler(0f,side*(Random.Range(35f,75f)+i*35f),0f)*forward;
+                Vector3 candidate=transform.position+direction*Random.Range(2.5f,4f);
+                if((candidate-searchAnchor).sqrMagnitude>64 || !IsTacticalDestinationSafe(candidate,1.8f))continue;
                 if(!SafeStep(candidate) || !EnemyCoverGeometry.Reachable(transform.position,candidate,transform,coverPathHits))continue;
                 probe=candidate;
                 return true;
@@ -949,7 +932,7 @@ namespace GeoSniper
 
                     if (suppressionTimer > 0f)
                     {
-                        suppressionTimer -= Time.deltaTime;
+
                         coverTimer = Mathf.Max(coverTimer, 0.7f);
                     }
                     coverTimer -= Time.deltaTime;
@@ -986,7 +969,7 @@ namespace GeoSniper
                         bool clearShot=playerVisible && distance<fireRange
                             && EnemyCoverGeometry.ClearShot(transform.position+Vector3.up*1.65f,targetEye,transform,player,coverPathHits)
                             && EnemyCoverGeometry.ClearShot(transform.position+Vector3.up*1.35f,targetEye,transform,player,coverPathHits);
-                        if (fireCooldown <= 0f && !IsReloading && clearShot)
+                        if (fireCooldown <= 0f && CanShootObservedTarget() && clearShot)
                         {
                             fireCooldown = Random.Range(2.8f, 4.2f) * ReactionScale;
                             StartCoroutine(ExecuteBurst(targetEye, distance));
@@ -1016,7 +999,7 @@ namespace GeoSniper
             if(toward.sqrMagnitude<.01f)return false;
             Vector3 side=Vector3.Cross(Vector3.up,toward.normalized);
             Vector3 targetEye=remembered+Vector3.up*(playerVisible && (player.GetComponent<UrbanPlayer>()?.IsCrouching??false)?.85f:1.55f);
-            float sign=(patrolIndex++&1)==0?1f:-1f;
+            float sign=Random.value<.7f?preferredCombatSide:-preferredCombatSide;
             for(int i=0;i<6;i++)
             {
                 float distance=1.2f+(i/2)*1.1f;
@@ -1183,8 +1166,8 @@ namespace GeoSniper
 
             fireCooldown -= Time.deltaTime;
             stateTimer -= Time.deltaTime;
-            flankCooldown=Mathf.Max(0,flankCooldown-Time.deltaTime);
-            if(UpdateFlank(visible,Time.deltaTime))return;
+            bool tacticalMovement = UpdatePlayerTactics(visible, d, Time.deltaTime);
+            if (currentState != AIState.Combat) return;
             if (!visible)
             {
                 MoveTowards(lastSeenPosition, 0.8f);
@@ -1200,50 +1183,21 @@ namespace GeoSniper
             if (grenadeCooldown > 0) grenadeCooldown -= Time.deltaTime;
 
             bool coveringAdvance=currentRole==CombatRole.Suppressor && HasAdvancingTeammate();
-            if (currentRole == CombatRole.Suppressor && !coveringAdvance && grenadeCooldown <= 0 && d > 15f && d < 40f)
+            if (currentRole == CombatRole.Suppressor && !coveringAdvance && grenadeCooldown <= 0 && d > 15f && d < 40f && CanShootObservedTarget())
             {
                 grenadeCooldown = Random.Range(10f, 15f);
                 StartCoroutine(ThrowGrenade(lastSeenPosition));
                 return;
             }
 
-            if(coveringAdvance)
-            {
-                combatTargetReady=false;
-                MoveTowards(transform.position);
-            }
-            if (!coveringAdvance && !combatTargetReady && combatPause <= 0)
-            {
-                ChooseCombatStrafeTarget(delta);
-                Vector3 flat = delta; flat.y = 0;
-                if (d > 45 || d < 12)
-                {
-                    var candidate = transform.position + flat.normalized * (d > 45 ? 6f : -4f);
-                    if (SafeStep(candidate) && !Physics.Linecast(eyes, candidate + Vector3.up * 1.65f, ~0, QueryTriggerInteraction.Ignore)) combatTarget = candidate;
-                }
-            }
-            if (!coveringAdvance && combatTargetReady && combatPause <= 0)
-            {
-                MoveTowards(combatTarget, 0.75f);
-                combatTargetTime -= Time.deltaTime;
-                if (Vector3.Distance(transform.position, combatTarget) < 1.1f || combatTargetTime <= 0 || blockedTime > 0.35f)
-                {
-                    combatTargetReady = false;
-                    combatPause = Random.Range(0.6f, 1.2f)*ReactionScale;
-                }
-            }
-            else
-            {
-                MoveTowards(transform.position);
-                combatPause -= Time.deltaTime;
-            }
+            if (!tacticalMovement) MoveTowards(transform.position, 0f, false);
 
             float fireRange=Time.time<provokedUntil?Mathf.Max(engagementRange,140f):engagementRange;
-            if (d < fireRange && fireCooldown <= 0 && !IsReloading && Vector3.Angle(transform.forward, aimDir) < 32f)
+            if (d < fireRange && fireCooldown <= 0 && CanShootObservedTarget())
             {
                 float fireRateMult = coveringAdvance ? 0.5f : (currentRole == CombatRole.Suppressor) ? 0.7f : 1f;
-                fireCooldown = Random.Range(3.0f, 5.0f) * fireRateMult * ReactionScale;
-                combatPause = Random.Range(1.8f, 3.2f) * ReactionScale;
+                fireCooldown = Random.Range(1.25f, 2.15f) * fireRateMult * ReactionScale;
+                combatPause = Random.Range(.35f, .65f) * ReactionScale;
                 StartCoroutine(ExecuteBurst(target, d));
             }
         }
@@ -1316,88 +1270,57 @@ namespace GeoSniper
 
         System.Collections.IEnumerator ExecuteBurst(Vector3 target, float d)
         {
-            int burstCount = (currentRole == CombatRole.Suppressor) ? Random.Range(4, 7) : Random.Range(2, 4);
-            for (int b = 0; b < burstCount; b++)
+            if (burstActive) yield break;
+            burstActive = true;
+            int generation = burstGeneration;
+            try
             {
-                if (actor == null || actor.IsDead || player == null || Suspended || isDisarmed || IsFlanking || IsReloading || (currentState!=AIState.Combat && !(currentState==AIState.TakeCover && coverSubState==CoverSubState.Peeking) && !isCounterSniper)) yield break;
-                if(magazineRounds<=0){StartReload();yield break;}
-                var eyes = transform.position + Vector3.up * 1.65f;
-                target = player.position + Vector3.up * ((player.GetComponent<UrbanPlayer>()?.IsCrouching??false)?.85f:1.55f);
-                d=Vector3.Distance(transform.position,player.position);
-                bool blocked = false;
-                Vector3 impactPt = target;
-                if (!EnemyCoverGeometry.ClearShot(eyes,target,transform,player,coverPathHits)
-                    || !EnemyCoverGeometry.ClearShot(transform.position+Vector3.up*1.35f,target,transform,player,coverPathHits))
+                int count = currentRole == CombatRole.Suppressor ? Random.Range(3, 5) : Random.Range(2, 4);
+                for (int i = 0; i < count; i++)
                 {
-                    yield break;
+                    bool shootingState = currentState == AIState.Combat || currentState == AIState.TakeCover && coverSubState == CoverSubState.Peeking;
+                    Vector3 flat = lastSeenPosition - transform.position; flat.y = 0;
+                    if (player == null || !isActiveAndEnabled || generation != burstGeneration || Suspended || IsFlanking || !shootingState || (player.GetComponent<CombatActor>()?.IsDead ?? false)
+                        || !EnemyReactionPolicy.CanFire(playerVisible, actor != null && !actor.IsDead, !isDisarmed, IsReloading,
+                            staggerTimer, suppressionTimer, acquisitionRemaining, Vector3.Angle(transform.forward, flat))) yield break;
+                    if (magazineRounds <= 0) { StartReload(); yield break; }
+                    Vector3 eyes = transform.position + Vector3.up * 1.65f;
+                    target = player.position + Vector3.up * ((player.GetComponent<UrbanPlayer>()?.IsCrouching ?? false) ? .85f : 1.55f);
+                    if (!EnemyCoverGeometry.ClearShot(eyes, target, transform, player, coverPathHits)) yield break;
+                    d = Vector3.Distance(transform.position, player.position);
+                    Vector3 muzzle = weaponMuzzle != null ? weaponMuzzle.position : transform.position + Vector3.up * 1.35f + transform.forward * .45f;
+                    Vector3 aim = (aimKnowledgeReady ? observedAim : target) - Vector3.up * .25f + observedVelocity * .04f;
+                    float wound = actor != null && actor.Health < actor.maxHealth * .5f ? .25f : 0;
+                    float spread = Mathf.Lerp(.65f, 1.2f, Mathf.InverseLerp(15, 100, d))
+                        / EnemyReactionPolicy.AccuracyMultiplier(CurrentSpeed, suppressionTimer, wound);
+                    spread *= Mathf.Clamp(ReactionScale, .75f, 1.5f);
+                    Vector3 direction = BulletDirection(muzzle, aim, spread);
+                    magazineRounds--;
+                    ResolveEnemyBullet(muzzle, direction, Mathf.Min(200f, d + 20f), Random.Range(4f, 7.5f) * DamageScale, out Vector3 impact);
+                    ShotReactionStrength = 1f;
+                    GetComponent<ArmyAnimation>()?.Fire();
+                    if (muzzleFlash == null)
+                    {
+                        var flash = new GameObject("Enemy muzzle flash");
+                        flash.transform.SetParent(weaponMuzzle != null ? weaponMuzzle : transform, false);
+                        if (weaponMuzzle == null) flash.transform.localPosition = Vector3.up * 1.35f + Vector3.forward * .45f;
+                        muzzleFlash = flash.AddComponent<Light>();
+                        muzzleFlash.type = LightType.Point; muzzleFlash.range = 8; muzzleFlash.color = new Color(1f,.7f,.25f);
+                    }
+                    muzzleFlash.intensity = 3.5f; muzzleFlashTimer = .06f;
+                    if (shotLine != null)
+                    {
+                        shotLine.SetPosition(0,muzzle); shotLine.SetPosition(1,impact); shotLine.enabled = true;
+                        StartCoroutine(HideShot());
+                    }
+                    if (enemyAudio == null) { enemyAudio=gameObject.AddComponent<AudioSource>(); enemyAudio.spatialBlend=1; enemyAudio.maxDistance=80; enemyAudio.volume=.35f; }
+                    if (sharedEnemyShotClip == null) sharedEnemyShotClip=BuildEnemyShotClip();
+                    PlayEnemyReport(false);
+                    if (magazineRounds == 0) StartReload();
+                    yield return new WaitForSeconds(currentRole == CombatRole.Suppressor ? .13f : .16f);
                 }
-                magazineRounds--;
-
-                GetComponent<ArmyAnimation>()?.Fire();
-
-                if (muzzleFlash == null)
-                {
-                    var flashObj = new GameObject("Enemy muzzle flash");
-                    if (weaponMuzzle != null)
-                    {
-                        flashObj.transform.SetParent(weaponMuzzle, false);
-                    }
-                    else if (gun != null)
-                    {
-                        flashObj.transform.SetParent(gun, false);
-                        flashObj.transform.localPosition = new Vector3(0.58f, 0f, 0f);
-                    }
-                    else
-                    {
-                        flashObj.transform.SetParent(transform, false);
-                        flashObj.transform.localPosition = Vector3.up * 1.35f + Vector3.forward * .65f;
-                    }
-                    muzzleFlash = flashObj.AddComponent<Light>();
-                    muzzleFlash.type = LightType.Point; muzzleFlash.range = 12; muzzleFlash.color = new Color(1f, .7f, .25f);
-                }
-                muzzleFlash.intensity = 4.0f; muzzleFlashTimer = .06f;
-                var muzzle = (weaponMuzzle != null) ? weaponMuzzle.position : (gun != null ? gun.position : muzzleFlash.transform.position);
-                shotLine.SetPosition(0, muzzle);
-                shotLine.SetPosition(1, Vector3.MoveTowards(muzzle, impactPt, Mathf.Min(3, d * .35f)));
-                shotLine.enabled = true;
-                StartCoroutine(HideShot());
-
-                if (blocked)
-                {
-                    SniperPresentation.SpawnImpactSparks(impactPt);
-                }
-                else
-                {
-                    Vector3 scatter = Random.insideUnitSphere * 1.5f;
-                    float hitChance = Mathf.Lerp(0.55f, 0.12f, Mathf.InverseLerp(10f, 65f, d));
-                    if (currentRole == CombatRole.Sniper) hitChance = Mathf.Lerp(0.75f, 0.35f, Mathf.InverseLerp(20f, 150f, d));
-                    
-                    bool directHit = Random.value < hitChance;
-                    if (directHit)
-                    {
-                        var hp = player.GetComponent<CombatActor>();
-                        if (hp != null) hp.Damage(Random.Range(4f, 7.5f) * Mathf.Min(1.2f, DamageScale), transform.position);
-                    }
-                    else
-                    {
-                        SniperPresentation.SpawnImpactSparks(target + scatter);
-                        // Suppression effect: bullet whizzing past player causes a slight flinch
-                        var uPlayer = player.GetComponent<UrbanPlayer>();
-                        if (uPlayer != null && !uPlayer.Scoped) 
-                        {
-                            uPlayer.ApplyRecoil(Random.Range(20f, 60f));
-                        }
-                    }
-                }
-
-                if (enemyAudio == null) { enemyAudio = gameObject.AddComponent<AudioSource>(); enemyAudio.spatialBlend = 1; enemyAudio.maxDistance = 80; enemyAudio.rolloffMode = AudioRolloffMode.Linear; enemyAudio.volume = .35f; }
-                if (sharedEnemyShotClip == null) sharedEnemyShotClip = BuildEnemyShotClip();
-                enemyAudio.PlayOneShot(sharedEnemyShotClip);
-
-                if(magazineRounds==0)StartReload();
-
-                yield return new WaitForSeconds(0.08f);
             }
+            finally { burstActive = false; }
         }
 
         public void ConfigureAsCounterSniper()
@@ -1508,22 +1431,24 @@ namespace GeoSniper
         void UpdateCounterSniper(bool visible, Vector3 delta, float d, Vector3 eyes, Vector3 target)
         {
             CurrentSpeed = 0;
-            Vector3 aimDir = delta; aimDir.y = 0;
+            Vector3 aimDir = (visible ? player.position : lastSeenPosition) - transform.position; aimDir.y = 0;
             if (aimDir.sqrMagnitude > 0.01f)
                 transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(aimDir), Time.deltaTime * 180f);
 
             fireCooldown -= Time.deltaTime;
 
-            if (!visible || d > engagementRange || isDisarmed)
+            if (!visible || d > engagementRange || isDisarmed || suppressionTimer > 0 || acquisitionRemaining > 0)
             {
-                if (sniperLaser != null) sniperLaser.enabled = false;
-                sniperAimTimer = 0f;
+                CancelSniperLock();
                 UpdateScopeGlint(transform.position, target, false);
                 if (ActiveAimingCounterSniper == this) ActiveAimingCounterSniper = null;
                 return;
             }
 
+            if (Vector3.Angle(transform.forward, aimDir) > 12f) { CancelSniperLock(); return; }
             sniperAimTimer += Time.deltaTime;
+            if (!sniperAimCommitted && sniperAimTimer >= SniperLock - .22f && fireCooldown <= .22f)
+            { committedSniperAim=observedAim;sniperAimCommitted=true; }
             ActiveAimingCounterSniper = this;
             var muzzle = (weaponMuzzle != null) ? weaponMuzzle.position : (gun != null ? gun.position : eyes);
 
@@ -1536,7 +1461,7 @@ namespace GeoSniper
                 sniperLaser.enabled = true;
                 sniperLaser.SetPosition(0, muzzle);
                 float wobble = Mathf.Max(0f, (SniperLock - sniperAimTimer) * 0.35f);
-                Vector3 laserEnd = target + Random.insideUnitSphere * wobble;
+                Vector3 laserEnd = (sniperAimCommitted ? committedSniperAim : target) + Random.insideUnitSphere * wobble;
                 sniperLaser.SetPosition(1, laserEnd);
                 float t = Mathf.Clamp01(sniperAimTimer / SniperLock);
                 sniperLaser.startWidth = Mathf.Lerp(0.012f, 0.038f, t);
@@ -1554,88 +1479,22 @@ namespace GeoSniper
 
         void ExecuteCounterSniperShot(Vector3 target, float d)
         {
-            if (isDisarmed) return;
-            GetComponent<ArmyAnimation>()?.Fire();
-            if (muzzleFlash != null)
-            {
-                muzzleFlash.intensity = 6.0f;
-                muzzleFlashTimer = 0.12f;
-            }
-
-            var urbanPlayer = player != null ? player.GetComponent<UrbanPlayer>() : null;
-            bool isCrouching = urbanPlayer != null && urbanPlayer.IsCrouching;
-
-            float hitChance = Mathf.Lerp(0.68f, 0.42f, Mathf.InverseLerp(30f, 180f, d));
-            bool isHit = Random.value < hitChance;
-
-            // Player dodge window: If player crouched / ducked during lock warning, round misses with loud supersonic crack!
-            if (isCrouching)
-            {
-                isHit = false;
-                var mission = FindObjectOfType<UrbanCombatMission>();
-                if (mission != null) mission.NotifySniperShotDodged();
-            }
-
-            Vector3 shotDestination = isHit ? target : (isCrouching ? player.position + Vector3.up * 1.85f + Random.insideUnitSphere * 0.35f : target + Random.insideUnitSphere * Random.Range(1.2f, 2.5f));
-
-            var muzzle = (weaponMuzzle != null) ? weaponMuzzle.position : (gun != null ? gun.position : transform.position + Vector3.up * 1.65f);
-            shotLine.SetPosition(0, muzzle);
-            shotLine.SetPosition(1, shotDestination);
-            shotLine.enabled = true;
-            StartCoroutine(HideShot());
-
-            if (enemyAudio == null) { enemyAudio = gameObject.AddComponent<AudioSource>(); enemyAudio.spatialBlend = 1; enemyAudio.maxDistance = 200; enemyAudio.rolloffMode = AudioRolloffMode.Linear; enemyAudio.volume = 0.85f; }
-            if (sharedEnemyShotClip == null) sharedEnemyShotClip = BuildEnemyShotClip();
-            enemyAudio.pitch = 0.72f;
-            enemyAudio.PlayOneShot(sharedEnemyShotClip);
-            enemyAudio.pitch = 1.0f;
-
-            if (Physics.Linecast(muzzle, shotDestination, out var hit, ~0, QueryTriggerInteraction.Ignore))
-            {
-                if (hit.transform == player || hit.transform.IsChildOf(player))
-                {
-                    if (isHit)
-                    {
-                        var hp = player.GetComponent<CombatActor>();
-                        if (hp != null) hp.Damage(Random.Range(22f, 32f) * Mathf.Min(1.2f, DamageScale), transform.position);
-                    }
-                    else
-                    {
-                        SniperPresentation.SpawnImpactSparks(hit.point);
-                        if (isCrouching && Camera.main != null)
-                        {
-                            var camAudio = Camera.main.GetComponent<AudioSource>();
-                            if (camAudio != null) camAudio.PlayOneShot(ProceduralAudio.CreateRicochetMiss(), 0.95f);
-                        }
-                    }
-                }
-                else
-                {
-                    SniperPresentation.SpawnImpactSparks(hit.point);
-                    if (isCrouching && Camera.main != null)
-                    {
-                        var camAudio = Camera.main.GetComponent<AudioSource>();
-                        if (camAudio != null) camAudio.PlayOneShot(ProceduralAudio.CreateRicochetMiss(), 0.95f);
-                    }
-                }
-            }
-            else
-            {
-                if (isHit)
-                {
-                    var hp = player.GetComponent<CombatActor>();
-                    if (hp != null) hp.Damage(Random.Range(35f, 50f)*DamageScale);
-                }
-                else
-                {
-                    SniperPresentation.SpawnImpactSparks(shotDestination);
-                    if (isCrouching && Camera.main != null)
-                    {
-                        var camAudio = Camera.main.GetComponent<AudioSource>();
-                        if (camAudio != null) camAudio.PlayOneShot(ProceduralAudio.CreateRicochetMiss(), 0.95f);
-                    }
-                }
-            }
+            if (!isActiveAndEnabled || isDisarmed || actor == null || actor.IsDead || Suspended || staggerTimer > 0 || suppressionTimer > 0 || !playerVisible || (player.GetComponent<CombatActor>()?.IsDead ?? false)) return;
+            Vector3 muzzle = weaponMuzzle != null ? weaponMuzzle.position : transform.position + Vector3.up * 1.55f;
+            Vector3 aim = sniperAimCommitted ? committedSniperAim : observedAim;
+            if (!aimKnowledgeReady) aim = target;
+            aim -= Vector3.up * .15f;
+            bool hit = ResolveEnemyBullet(muzzle, BulletDirection(muzzle, aim, .12f * Mathf.Clamp(ReactionScale,.75f,1.5f)),
+                Mathf.Min(250f,d+20f), Random.Range(22f,32f)*DamageScale, out Vector3 impact);
+            ShotReactionStrength=1f; GetComponent<ArmyAnimation>()?.Fire();
+            if (muzzleFlash != null) { muzzleFlash.intensity=3.5f; muzzleFlashTimer=.06f; }
+            if (shotLine != null) { shotLine.SetPosition(0,muzzle);shotLine.SetPosition(1,impact);shotLine.enabled=true;StartCoroutine(HideShot()); }
+            if (enemyAudio == null) { enemyAudio=gameObject.AddComponent<AudioSource>();enemyAudio.spatialBlend=1;enemyAudio.maxDistance=200;enemyAudio.volume=.85f; }
+            if (sharedEnemyShotClip == null) sharedEnemyShotClip=BuildEnemyShotClip();
+            PlayEnemyReport(true);
+            if (!hit && (player.GetComponent<UrbanPlayer>()?.IsCrouching ?? false))
+                FindAnyObjectByType<UrbanCombatMission>()?.NotifySniperShotDodged();
+            sniperAimCommitted=false;
         }
 
         void UpdateVipAttack()
@@ -1696,7 +1555,7 @@ namespace GeoSniper
             int burstCount = Random.Range(2, 4);
             for (int b = 0; b < burstCount; b++)
             {
-                if (actor == null || actor.IsDead || isDisarmed || IsReloading || vip == null || vip.Actor == null || vip.Actor.IsDead || Suspended) yield break;
+                if (actor == null || actor.IsDead || isDisarmed || IsReloading || staggerTimer > 0 || suppressionTimer > 0 || vip == null || vip.Actor == null || vip.Actor.IsDead || Suspended) yield break;
                 var eyes = transform.position + Vector3.up * 1.65f + transform.forward * 0.5f;
                 var target = vip.transform.position + Vector3.up * 1.1f;
                 int mask = ~(1 << 2);
@@ -1735,7 +1594,7 @@ namespace GeoSniper
 
                 if (enemyAudio == null) { enemyAudio = gameObject.AddComponent<AudioSource>(); enemyAudio.spatialBlend = 1; enemyAudio.maxDistance = 80; enemyAudio.rolloffMode = AudioRolloffMode.Linear; enemyAudio.volume = .45f; }
                 if (sharedEnemyShotClip == null) sharedEnemyShotClip = BuildEnemyShotClip();
-                enemyAudio.PlayOneShot(sharedEnemyShotClip);
+                PlayEnemyReport(false);
 
                 yield return new WaitForSeconds(0.11f);
             }
@@ -1747,9 +1606,8 @@ namespace GeoSniper
         static Material cachedLaserMat;
         static AudioClip BuildEnemyShotClip()
         {
-            const int rate=22050; int len=(int)(.35f*rate); var samples=new float[len]; var rng=new System.Random(77);
-            for(int i=0;i<len;i++) { float t=i/(float)rate,n=(float)rng.NextDouble()*2-1; samples[i]=n*.7f*Mathf.Exp(-t*40)+Mathf.Sin(t*2*Mathf.PI*65)*.3f*Mathf.Exp(-t*12); }
-            var clip=AudioClip.Create("Enemy shot",len,1,rate,false); clip.SetData(samples,0); return clip;
+            var recorded=Resources.Load<AudioClip>("Audio/HeavyRifleShot");
+            return recorded!=null?recorded:ProceduralAudio.CreateHeavyRifleShot();
         }
         System.Collections.IEnumerator HideShot()
         {
@@ -1757,28 +1615,12 @@ namespace GeoSniper
             if(shotLine!=null) shotLine.enabled=false;
         }
         public void Damage(float amount)
-        { 
-            actor?.Damage(amount); 
-            if (actor != null && !actor.IsDead) 
-            {
-                staggerTimer = 0.4f;
-                if (!isFugitiveRunner && currentState != AIState.Combat && !actor.IsDead)
-                {
-                    // Enter combat
-                    currentState = AIState.Combat;
-                    stateTimer = 12f;
-                    combatTargetReady = false;
-                    combatPause = 0.5f*ReactionScale;
-                    grenadeCooldown = Random.Range(3f, 8f);
-                    
-                    squadRoleTimer=0; // The same squad assignment applies to sight, radio and damage alerts.
-                }
-            }
-        }
+            => actor?.Damage(amount);
         
         void HandleDeath(CombatActor actor)
         {
             if (ActiveAimingCounterSniper == this) ActiveAimingCounterSniper = null;
+            if (muzzleFlash != null) { muzzleFlash.intensity=0; muzzleFlashTimer=0; }
             if (scopeGlintObj != null) scopeGlintObj.SetActive(false);
             if (sniperLaser != null) sniperLaser.enabled = false;
             if (navigationAgent != null) navigationAgent.enabled = false;
@@ -1819,7 +1661,7 @@ namespace GeoSniper
             impactDir.y = 0;
             if (impactDir.sqrMagnitude < 0.01f) impactDir = -transform.forward;
 
-            // Trigger physical skeletal ragdoll on EnemyWalkAnimator so body folds realistically over railings
+            // Physical skeletal collapse preserves the earlier ragdoll fixes.
             bool ragdollActive = walk != null && walk.EnablePhysicalRagdoll(impactDir, transform.position);
 
             if (!ragdollActive)
@@ -1839,9 +1681,10 @@ namespace GeoSniper
                 rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
                 // Heavy ballistic impact momentum: backward force + torso torque
-                rb.AddForce(impactDir * Random.Range(260f, 380f) + Vector3.up * Random.Range(70f, 120f), ForceMode.Impulse);
+                rb.angularDamping=1.2f;rb.maxAngularVelocity=4f;
+                rb.AddForce(impactDir.normalized * 40f, ForceMode.Impulse);
                 Vector3 torqueAxis = Vector3.Cross(impactDir, Vector3.up) + Random.insideUnitSphere * 0.4f;
-                rb.AddTorque(torqueAxis * Random.Range(160f, 280f), ForceMode.Impulse);
+                rb.AddTorque(torqueAxis * 12f, ForceMode.Impulse);
                 StartCoroutine(SettleCasualty(rb));
             }
 
@@ -1888,6 +1731,7 @@ namespace GeoSniper
         {
             if (actor == null || actor.IsDead || Suspended) return;
 
+            if(isDisarmed){PoseDisarmedHands();return;}
             bool isAiming = IsAiming;
             if (isAiming)
             {
@@ -1923,6 +1767,7 @@ namespace GeoSniper
 
         void OnDestroy()
         {
+            if(droppedWeapon!=null){if(Application.isPlaying)Destroy(droppedWeapon.gameObject);else DestroyImmediate(droppedWeapon.gameObject);}
             if(shotLine!=null && shotLine.sharedMaterial!=null)
             { if(Application.isPlaying) Destroy(shotLine.sharedMaterial); else DestroyImmediate(shotLine.sharedMaterial); }
             if (scopeGlintObj != null) Destroy(scopeGlintObj);

@@ -8,7 +8,7 @@ using UnityEngine;
 public sealed class AndroidRuntimeAssets : IPreprocessBuildWithReport
 {
     public int callbackOrder => -100;
-    static readonly string[] RuntimeShaders = { "Standard", "Unlit/Color" };
+    static readonly string[] RuntimeShaders = { "Standard", "Unlit/Color", "Unlit/Texture", "Sprites/Default" };
     public void OnPreprocessBuild(BuildReport report)
     {
         var settings=AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/GraphicsSettings.asset").FirstOrDefault();
@@ -34,3 +34,4 @@ public sealed class AndroidRuntimeAssets : IPreprocessBuildWithReport
         AssetDatabase.SaveAssets();
     }
 }
+

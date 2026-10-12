@@ -6,6 +6,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 public static class RealSectorPreview
 {
+ public static void RunStarter(){SessionState.SetBool("GeoSniper.StarterPreview",true);Run();}
  static readonly System.Collections.Generic.List<string> treeLodRows=new System.Collections.Generic.List<string>();
  public static void Run()
  {
@@ -14,7 +15,8 @@ public static class RealSectorPreview
   try {
    treeLodRows.Clear();
    EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
-   var features=MapServiceClient.Decode(File.ReadAllText("real-sector.json"));
+   bool starter=SessionState.GetBool("GeoSniper.StarterPreview",false);SessionState.SetBool("GeoSniper.StarterPreview",false);
+   var features=starter?SectorMap.Training():MapServiceClient.Decode(File.ReadAllText("real-sector.json"));
    var heightSample=Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText("real-sector.json"));
    var heightRows=(Newtonsoft.Json.Linq.JArray)heightSample["features"];int sampleIndex=-1;
    for(int i=0;i<heightRows.Count;i++)if((string)heightRows[i]["kind"]=="building"){sampleIndex=i;break;}
@@ -34,7 +36,15 @@ public static class RealSectorPreview
    RenderSettings.fog=true;RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogStartDistance=450f;RenderSettings.fogEndDistance=1800f;RenderSettings.fogColor=new Color(.68f,.78f,.88f);
    var camera=new GameObject("Sector camera").AddComponent<Camera>();camera.farClipPlane=1800;camera.fieldOfView=55;camera.clearFlags=CameraClearFlags.SolidColor;camera.backgroundColor=new Color(.68f,.78f,.88f);camera.allowHDR=true;MobilePostProcess.Ensure(camera);
    AtmosphericSky.Create(camera);
+   // Edit-mode batch previews don't run MonoBehaviour.Awake automatically.
+   if(AtmosphericSky.Instance.GetComponent<MeshFilter>()==null)
+       typeof(AtmosphericSky).GetMethod("Awake",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(AtmosphericSky.Instance,null);
    camera.transform.position=new Vector3(430,420,-430);camera.transform.LookAt(Vector3.zero);Capture(camera,"real-sector-overview");
+   var style=new GameObject("Production environment preview").AddComponent<UrbanCombatMission>();
+   var flags=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;
+   typeof(UrbanCombatMission).GetField("cameraView",flags).SetValue(style,camera);
+   typeof(UrbanCombatMission).GetMethod("ApplyEnvironment",flags).Invoke(style,null);
+   camera.transform.position=starter?new Vector3(80,20,-100):new Vector3(90,32,-30);camera.transform.LookAt(starter?new Vector3(30,22,340):new Vector3(170,10,100));Capture(camera,starter?"starter-city-day":"reference-city-day");
    RenderSettings.fogStartDistance=60f;RenderSettings.fogEndDistance=550f;
    var road=features.Find(f=>f.Kind=="road" && f.Points.Count>1 && MapFeatureStyle.RoadWidth(f)>=6 && f.Points[0].sqrMagnitude<120*120);
    if(road!=null){var a=road.Points[0];var b=road.Points[1];var direction=(b-a).normalized;camera.transform.position=new Vector3(a.x,2,a.y);camera.transform.LookAt(camera.transform.position+new Vector3(direction.x,.03f,direction.y)*20);Capture(camera,"real-sector-street");}
@@ -48,6 +58,9 @@ public static class RealSectorPreview
    SectorStreetLighting.SetNight(false,4f);SectorStreetLighting.AdvanceTransition(.5f);
    if(Mathf.Abs(SectorStreetLighting.NightBlend-.125f)>.001f)throw new Exception("Interrupted dusk transition snapped");
    SectorStreetLighting.SetNight(true);SectorStreetLighting.RefreshActiveLights(camera);
+   typeof(UrbanCombatMission).GetField("envState",flags).SetValue(style,1);
+   typeof(UrbanCombatMission).GetMethod("ApplyEnvironment",flags).Invoke(style,null);
+   camera.transform.position=starter?new Vector3(80,20,-100):new Vector3(90,32,-30);camera.transform.LookAt(starter?new Vector3(30,22,340):new Vector3(170,10,100));Capture(camera,starter?"starter-city-night":"reference-city-night");
    if(windowMaterial!=null && windowMaterial.GetColor("_EmissionColor").r<1)throw new Exception("Night windows did not illuminate");
    sun.intensity=.12f;sun.color=new Color(.38f,.48f,.72f);RenderSettings.ambientSkyColor=new Color(.045f,.065f,.12f);RenderSettings.ambientEquatorColor=new Color(.03f,.045f,.08f);RenderSettings.ambientGroundColor=new Color(.015f,.02f,.035f);camera.backgroundColor=new Color(.025f,.04f,.075f);
    RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogStartDistance=30f;RenderSettings.fogEndDistance=350f;RenderSettings.fogColor=new Color(.025f,.04f,.075f);

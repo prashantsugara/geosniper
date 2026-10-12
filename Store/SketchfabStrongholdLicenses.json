@@ -1,0 +1,62 @@
+[
+  {
+    "title": "Low Poly Afghanistan House Obj",
+    "creator": "omar.takwa0865",
+    "source": "https://sketchfab.com/3d-models/low-poly-afghanistan-house-obj-9f97af2ec2fd4379a65c0683b65d08c3",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloaded": "2026-10-10",
+    "changes": "Afghan shell grounded/scaled, window inserts removed, physical planar UVs; authored open gallery extension with collidable stairs, doorways, arches, timber rails and roof parapet. Desert-house plaster, stone and timber maps copied at 1024px. Sandbag geometry/PBR preserved. Arab Building downloaded for review; its closed-panel wing is no longer used in the exported stronghold."
+  },
+  {
+    "title": "Desert house 01 FREE",
+    "creator": "filthycent",
+    "source": "https://sketchfab.com/3d-models/desert-house-01-free-2f7b88bbcf1b454cad2c3e9dbc9dd18e",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloaded": "2026-10-10",
+    "changes": "Afghan shell grounded/scaled, window inserts removed, physical planar UVs; authored open gallery extension with collidable stairs, doorways, arches, timber rails and roof parapet. Desert-house plaster, stone and timber maps copied at 1024px. Sandbag geometry/PBR preserved. Arab Building downloaded for review; its closed-panel wing is no longer used in the exported stronghold."
+  },
+  {
+    "title": "Sandbag [Low Poly Realist]",
+    "creator": "Islide",
+    "source": "https://sketchfab.com/3d-models/sandbag-low-poly-realist-7d52600a15c747749d845d9f906045cf",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloaded": "2026-10-10",
+    "changes": "Afghan shell grounded/scaled, window inserts removed, physical planar UVs; authored open gallery extension with collidable stairs, doorways, arches, timber rails and roof parapet. Desert-house plaster, stone and timber maps copied at 1024px. Sandbag geometry/PBR preserved. Arab Building downloaded for review; its closed-panel wing is no longer used in the exported stronghold."
+  },
+  {
+    "title": "Arab Building",
+    "creator": "Usmanix3D",
+    "source": "https://sketchfab.com/3d-models/arab-building-a00d262125c245058f8ddd0e887bb833",
+    "license": {
+      "uri": "https://api.sketchfab.com/v3/licenses/322a749bcfa841b29dff1e8a1bb74b0b",
+      "label": "CC Attribution",
+      "fullName": "Creative Commons Attribution",
+      "requirements": "Author must be credited. Commercial use is allowed.",
+      "url": "http://creativecommons.org/licenses/by/4.0/",
+      "slug": "by"
+    },
+    "downloaded": "2026-10-10",
+    "changes": "Afghan shell grounded/scaled, window inserts removed, physical planar UVs; authored open gallery extension with collidable stairs, doorways, arches, timber rails and roof parapet. Desert-house plaster, stone and timber maps copied at 1024px. Sandbag geometry/PBR preserved. Arab Building downloaded for review; its closed-panel wing is no longer used in the exported stronghold."
+  }
+]
